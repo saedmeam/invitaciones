@@ -1,0 +1,733 @@
+import fs from 'fs';
+import { Router, Request, Response, NextFunction } from 'express';
+import multer from 'multer';
+import { z } from 'zod';
+import { RsvpDomainService } from '../../domain/services/RsvpDomainService';
+import { env } from '../../infrastructure/config/env';
+import { AppError } from '../../shared/errors/AppError';
+import { AppContainer } from '../container';
+import { AuthenticatedRequest, createAuthMiddleware } from '../middlewares/authMiddleware';
+import { createRateLimiter } from '../middlewares/rateLimitMiddleware';
+
+const asyncHandler =
+  (fn: (req: AuthenticatedRequest, res: Response, next: NextFunction) => Promise<unknown>) =>
+  (req: Request, res: Response, next: NextFunction) => {
+    Promise.resolve(fn(req as AuthenticatedRequest, res, next)).catch(next);
+  };
+
+export function createApiRouter(container: AppContainer): Router {
+  const router = Router();
+  const requireAuth = createAuthMiddleware(container.jwtSecret);
+  const loginLimiter = createRateLimiter(15, 60 * 1000);
+  const pinUploadLimiter = createRateLimiter(30, 60 * 1000);
+
+  fs.mkdirSync(env.tempUploadDir, { recursive: true });
+  const mediaUpload = multer({
+    dest: env.tempUploadDir,
+    limits: { fileSize: env.maxUploadMb * 1024 * 1024 },
+  });
+  const excelUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+  });
+
+  // Health
+  router.get('/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      whatsapp: container.whatsappProvider.getState().status,
+      emailConfigured: container.emailProvider.isConfigured(),
+      driveConfigured: container.driveProvider.isConfigured(),
+    });
+  });
+
+  // Auth
+  router.post(
+    '/auth/login',
+    loginLimiter,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({ email: z.string().email(), password: z.string().min(1) });
+      const { email, password } = schema.parse(req.body);
+      const data = await container.authUseCases.login(email, password);
+      res.json(data);
+    })
+  );
+
+  router.get(
+    '/auth/me',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const user = await container.authUseCases.getMe(req.user!.userId);
+      res.json({ user });
+    })
+  );
+
+  // Public Invitation & Event
+  router.get(
+    '/public/featured',
+    asyncHandler(async (_req, res) => {
+      const event = await container.eventUseCases.getFeaturedPublic();
+      res.json({
+        event: event
+          ? {
+              ...event,
+              photoPin: undefined,
+              requiresPhotoPin: Boolean(event.photoPin && event.photoPin.trim()),
+            }
+          : null,
+      });
+    })
+  );
+
+  router.get(
+    '/public/events/:slug',
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.getPublicBySlug(String(req.params.slug));
+      res.json({
+        event: {
+          ...event,
+          photoPin: event.photoPin ? '***' : '',
+          requiresPhotoPin: Boolean(event.photoPin && event.photoPin.trim()),
+        },
+      });
+    })
+  );
+
+  router.get(
+    '/public/events/:slug/calendar.ics',
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.getPublicBySlug(String(req.params.slug));
+      const ics = RsvpDomainService.buildIcsCalendar(event);
+      res.setHeader('Content-Type', 'text/calendar; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="boda-${event.slug}.ics"`);
+      res.send(ics);
+    })
+  );
+
+  router.get(
+    '/public/invitations/:token',
+    asyncHandler(async (req, res) => {
+      const data = await container.rsvpUseCases.getByTokenAndTrackView(String(req.params.token));
+      res.json({
+        event: {
+          ...data.event,
+          photoPin: undefined,
+          requiresPhotoPin: Boolean(data.event.photoPin && data.event.photoPin.trim()),
+        },
+        group: data.group,
+      });
+    })
+  );
+
+  router.post(
+    '/public/invitations/:token/rsvp',
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        members: z
+          .array(
+            z.object({
+              id: z.string().min(1),
+              fullName: z.string().max(120),
+              attending: z.boolean(),
+            })
+          )
+          .min(1),
+        guestMessage: z.string().max(500).optional(),
+      });
+      const body = schema.parse(req.body);
+      const updated = await container.rsvpUseCases.submitByToken(String(req.params.token), body);
+      res.json({ group: updated });
+    })
+  );
+
+  // Public Wishes
+  router.get(
+    '/public/events/:slug/wishes',
+    asyncHandler(async (req, res) => {
+      const wishes = await container.mediaAndWishUseCases.listPublicWishes(String(req.params.slug));
+      res.json({ wishes });
+    })
+  );
+
+  router.post(
+    '/public/events/:slug/wishes',
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        authorName: z.string().min(1).max(80),
+        message: z.string().min(1).max(600),
+      });
+      const body = schema.parse(req.body);
+      const wish = await container.mediaAndWishUseCases.createPublicWish(
+        String(req.params.slug),
+        body.authorName,
+        body.message
+      );
+      res.status(201).json({ wish });
+    })
+  );
+
+  // Public Media QR Upload & Gallery
+  router.get(
+    '/public/events/:slug/media',
+    asyncHandler(async (req, res) => {
+      const media = await container.mediaAndWishUseCases.listPublicMedia(String(req.params.slug));
+      res.json({ media });
+    })
+  );
+
+  router.post(
+    '/public/events/:slug/media/upload',
+    pinUploadLimiter,
+    mediaUpload.array('files', 15),
+    asyncHandler(async (req, res) => {
+      const files = (req.files as Express.Multer.File[]) || [];
+      if (files.length === 0) {
+        throw new AppError('Debes seleccionar al menos una foto o video', 400, 'NO_FILES');
+      }
+      const uploaderName = String(req.body?.uploaderName || 'Invitado');
+      const caption = req.body?.caption ? String(req.body.caption) : undefined;
+      const pin = req.body?.pin ? String(req.body.pin) : undefined;
+
+      const uploaded = [];
+      for (const file of files) {
+        const asset = await container.mediaAndWishUseCases.uploadMediaBySlug({
+          slug: String(req.params.slug),
+          uploaderName,
+          caption,
+          pin,
+          file,
+        });
+        uploaded.push(asset);
+      }
+      res.status(201).json({ uploaded });
+    })
+  );
+
+  router.get(
+    '/public/media/:mediaId/file',
+    asyncHandler(async (req, res) => {
+      const { media, stream } = await container.mediaAndWishUseCases.streamMedia(
+        String(req.params.mediaId)
+      );
+      res.setHeader('Content-Type', media.mimeType);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      stream.pipe(res);
+    })
+  );
+
+  // Google OAuth2 helper
+  router.get(
+    '/media/google/auth-url',
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+      const url = container.driveProvider.getAuthUrl();
+      res.json({ url, configured: container.driveProvider.isConfigured() });
+    })
+  );
+
+  router.get(
+    '/media/google/callback',
+    asyncHandler(async (req, res) => {
+      const code = String(req.query.code || '');
+      if (!code) {
+        throw new AppError('Falta código de autorización de Google', 400, 'MISSING_CODE');
+      }
+      const { refreshToken } = await container.driveProvider.exchangeCodeForTokens(code);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.send(
+        `<html><body style="font-family:sans-serif;padding:32px;max-width:640px;margin:auto;">
+          <h2>Google Drive conectado</h2>
+          <p>Copia este <strong>GOOGLE_REFRESH_TOKEN</strong> en tu archivo <code>backend/.env</code>:</p>
+          <pre style="background:#f5f5f4;padding:12px;border-radius:8px;overflow:auto;">${refreshToken || 'No se recibió refresh_token (revoca el acceso previo en Google y vuelve a autorizar)'}</pre>
+          <p>Ya puedes cerrar esta ventana.</p>
+        </body></html>`
+      );
+    })
+  );
+
+  // Admin: Events (SUPERADMIN y COUPLE scoping)
+  router.get(
+    '/events',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const events = await container.eventUseCases.listForActor(req.user!);
+      res.json({ events });
+    })
+  );
+
+  router.post(
+    '/events',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        slug: z.string().min(2).max(100),
+        title: z.string().min(2).max(120),
+        partnerOneName: z.string().min(1).max(120),
+        partnerTwoName: z.string().min(1).max(120),
+        eventDate: z.string().min(4),
+        rsvpDeadline: z.string().nullable().optional(),
+        ceremonyTitle: z.string().optional(),
+        ceremonyTime: z.string().optional(),
+        ceremonyAddress: z.string().optional(),
+        ceremonyMapUrl: z.string().optional(),
+        receptionTitle: z.string().optional(),
+        receptionTime: z.string().optional(),
+        receptionAddress: z.string().optional(),
+        receptionMapUrl: z.string().optional(),
+        theme: z.enum(['ROMANTIC_EDITORIAL', 'BOTANICAL_GARDEN', 'CLASSIC_NOCTURNE']).optional(),
+        themeConfig: z.record(z.unknown()).optional(),
+        sectionsConfig: z.record(z.boolean()).optional(),
+        contentConfig: z.record(z.unknown()).optional(),
+        driveFolderId: z.string().nullable().optional(),
+        photosAlbumId: z.string().nullable().optional(),
+        mediaProvider: z.enum(['GOOGLE_PHOTOS', 'GOOGLE_DRIVE', 'HYBRID']).optional(),
+        photoPin: z.string().nullable().optional(),
+        isPrimary: z.boolean().optional(),
+      });
+      const body = schema.parse(req.body);
+      const event = await container.eventUseCases.create(req.user!, body as any);
+      res.status(201).json({ event });
+    })
+  );
+
+  router.get(
+    '/events/:eventId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.getByIdForActor(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json({ event });
+    })
+  );
+
+  router.put(
+    '/events/:eventId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.update(
+        String(req.params.eventId),
+        req.user!,
+        req.body
+      );
+      res.json({ event });
+    })
+  );
+
+  router.delete(
+    '/events/:eventId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.eventUseCases.remove(String(req.params.eventId), req.user!);
+      res.status(204).send();
+    })
+  );
+
+  // Admin: Couple Users (Solo SUPERADMIN)
+  router.get(
+    '/events/:eventId/couple-users',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const users = await container.authUseCases.listCoupleUsers(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json({ users });
+    })
+  );
+
+  router.post(
+    '/events/:eventId/couple-users',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        email: z.string().email(),
+        name: z.string().min(2).max(120),
+        password: z.string().min(6).max(100),
+      });
+      const body = schema.parse(req.body);
+      const user = await container.authUseCases.upsertCoupleUser(
+        String(req.params.eventId),
+        req.user!,
+        body
+      );
+      res.status(201).json({ user });
+    })
+  );
+
+  router.delete(
+    '/events/:eventId/couple-users/:userId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.authUseCases.deleteCoupleUser(
+        String(req.params.eventId),
+        String(req.params.userId),
+        req.user!
+      );
+      res.status(204).send();
+    })
+  );
+
+  // Admin: Guests & Stats
+  router.get(
+    '/events/:eventId/stats',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const stats = await container.guestUseCases.getStats(String(req.params.eventId), req.user!);
+      res.json({ stats });
+    })
+  );
+
+  router.get(
+    '/events/:eventId/guests',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const guests = await container.guestUseCases.listByEvent(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json({ guests });
+    })
+  );
+
+  router.post(
+    '/events/:eventId/guests',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        groupName: z.string().min(1).max(120),
+        category: z.string().max(60).optional(),
+        email: z.string().email().nullable().optional().or(z.literal('')),
+        phone: z.string().max(30).nullable().optional(),
+        maxGuests: z.number().int().min(1).max(20),
+        memberNames: z.array(z.string()).optional(),
+      });
+      const body = schema.parse(req.body);
+      const guest = await container.guestUseCases.create(
+        String(req.params.eventId),
+        req.user!,
+        body
+      );
+      res.status(201).json({ guest });
+    })
+  );
+
+  router.put(
+    '/events/:eventId/guests/:groupId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const guest = await container.guestUseCases.update(
+        String(req.params.eventId),
+        String(req.params.groupId),
+        req.user!,
+        req.body
+      );
+      res.json({ guest });
+    })
+  );
+
+  router.delete(
+    '/events/:eventId/guests/:groupId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.guestUseCases.delete(
+        String(req.params.eventId),
+        String(req.params.groupId),
+        req.user!
+      );
+      res.status(204).send();
+    })
+  );
+
+  router.post(
+    '/events/:eventId/guests/import',
+    requireAuth,
+    excelUpload.single('file'),
+    asyncHandler(async (req, res) => {
+      if (!req.file) {
+        throw new AppError('Adjunta un archivo Excel (.xlsx o .csv)', 400, 'NO_FILE');
+      }
+      const result = await container.guestUseCases.importFromExcel(
+        String(req.params.eventId),
+        req.user!,
+        req.file.buffer
+      );
+      res.json(result);
+    })
+  );
+
+  router.get(
+    '/events/:eventId/guests/export',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const format = String(req.query.format || 'EXCEL').toUpperCase() === 'PDF' ? 'PDF' : 'EXCEL';
+      const result = await container.guestUseCases.exportReport(
+        String(req.params.eventId),
+        req.user!,
+        format
+      );
+      res.setHeader('Content-Type', result.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      res.send(result.buffer);
+    })
+  );
+
+  // Admin & Couple: Mesas y Puestos
+  router.get(
+    '/events/:eventId/tables',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const data = await container.tableUseCases.listSeating(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json(data);
+    })
+  );
+
+  router.post(
+    '/events/:eventId/tables',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(1).max(80),
+        capacity: z.number().int().min(1).max(30).optional(),
+        shape: z.enum(['ROUND', 'RECTANGULAR', 'HEAD']).optional(),
+        zone: z.string().max(80).optional(),
+      });
+      const body = schema.parse(req.body);
+      const table = await container.tableUseCases.createTable(
+        String(req.params.eventId),
+        req.user!,
+        body
+      );
+      res.status(201).json({ table });
+    })
+  );
+
+  router.put(
+    '/events/:eventId/tables/:tableId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(1).max(80).optional(),
+        capacity: z.number().int().min(1).max(30).optional(),
+        shape: z.enum(['ROUND', 'RECTANGULAR', 'HEAD']).optional(),
+        zone: z.string().max(80).optional(),
+        sortOrder: z.number().int().optional(),
+      });
+      const body = schema.parse(req.body);
+      const table = await container.tableUseCases.updateTable(
+        String(req.params.eventId),
+        String(req.params.tableId),
+        req.user!,
+        body
+      );
+      res.json({ table });
+    })
+  );
+
+  router.delete(
+    '/events/:eventId/tables/:tableId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.tableUseCases.deleteTable(
+        String(req.params.eventId),
+        String(req.params.tableId),
+        req.user!
+      );
+      res.status(204).send();
+    })
+  );
+
+  router.post(
+    '/events/:eventId/tables/:tableId/assign',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        memberId: z.string().optional(),
+        groupId: z.string().optional(),
+        seatNumber: z.number().int().min(1).max(30).nullable().optional(),
+      });
+      const body = schema.parse(req.body);
+      const table = await container.tableUseCases.assignToTable(
+        String(req.params.eventId),
+        String(req.params.tableId),
+        req.user!,
+        body
+      );
+      res.json({ table });
+    })
+  );
+
+  router.post(
+    '/events/:eventId/tables/unassign',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({ memberId: z.string().min(1) });
+      const { memberId } = schema.parse(req.body);
+      await container.tableUseCases.unassignMember(
+        String(req.params.eventId),
+        req.user!,
+        memberId
+      );
+      res.status(204).send();
+    })
+  );
+
+  router.get(
+    '/events/:eventId/tables/export',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const format = String(req.query.format || 'EXCEL').toUpperCase() === 'PDF' ? 'PDF' : 'EXCEL';
+      const result = await container.tableUseCases.exportSeatingReport(
+        String(req.params.eventId),
+        req.user!,
+        format
+      );
+      res.setHeader('Content-Type', result.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
+      res.send(result.buffer);
+    })
+  );
+
+  // Admin: Dispatch (WhatsApp & Email)
+  router.post(
+    '/events/:eventId/dispatch',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        channel: z.enum(['WHATSAPP', 'EMAIL']),
+        groupIds: z.array(z.string()).optional(),
+        onlyPending: z.boolean().optional(),
+        customMessage: z.string().max(1500).optional(),
+        subject: z.string().max(200).optional(),
+      });
+      const body = schema.parse(req.body);
+      const summary = await container.dispatchUseCases.sendBatch(
+        String(req.params.eventId),
+        req.user!,
+        body
+      );
+      res.json(summary);
+    })
+  );
+
+  router.get(
+    '/events/:eventId/dispatch/logs',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const logs = await container.dispatchUseCases.listLogs(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json({ logs });
+    })
+  );
+
+  // Admin: Media & Wishes & QR
+  router.get(
+    '/events/:eventId/media/qr',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const qr = await container.mediaAndWishUseCases.generatePhotoQr(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json(qr);
+    })
+  );
+
+  router.get(
+    '/events/:eventId/media',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const media = await container.mediaAndWishUseCases.listAdminMedia(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json({ media });
+    })
+  );
+
+  router.patch(
+    '/events/:eventId/media/:mediaId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({ status: z.enum(['APPROVED', 'PENDING', 'REJECTED']) });
+      const { status } = schema.parse(req.body);
+      const updated = await container.mediaAndWishUseCases.moderateMedia(
+        String(req.params.eventId),
+        String(req.params.mediaId),
+        req.user!,
+        status
+      );
+      res.json({ media: updated });
+    })
+  );
+
+  router.delete(
+    '/events/:eventId/media/:mediaId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.mediaAndWishUseCases.deleteMedia(
+        String(req.params.eventId),
+        String(req.params.mediaId),
+        req.user!
+      );
+      res.status(204).send();
+    })
+  );
+
+  router.get(
+    '/events/:eventId/wishes',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const wishes = await container.mediaAndWishUseCases.listAdminWishes(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json({ wishes });
+    })
+  );
+
+  router.delete(
+    '/events/:eventId/wishes/:wishId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.mediaAndWishUseCases.deleteWish(
+        String(req.params.eventId),
+        String(req.params.wishId),
+        req.user!
+      );
+      res.status(204).send();
+    })
+  );
+
+  // Admin: WhatsApp Baileys Control
+  router.get('/whatsapp/status', requireAuth, (_req, res) => {
+    res.json(container.whatsappProvider.getState());
+  });
+
+  router.post(
+    '/whatsapp/connect',
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+      await container.whatsappProvider.connect();
+      res.json(container.whatsappProvider.getState());
+    })
+  );
+
+  router.post(
+    '/whatsapp/disconnect',
+    requireAuth,
+    asyncHandler(async (_req, res) => {
+      await container.whatsappProvider.disconnect();
+      res.json(container.whatsappProvider.getState());
+    })
+  );
+
+  return router;
+}

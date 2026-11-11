@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AdminUser {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  name            String
+  role            String   @default("SUPERADMIN")
+  assignedEventId String?
+  assignedEvent   Event?   @relation("CoupleEventAccess", fields: [assignedEventId], references: [id], onDelete: SetNull)
+  events          Event[]  @relation("EventOwner")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Event {
+  id               String            @id @default(cuid())
+  slug             String            @unique
+  title            String
+  partnerOneName   String
+  partnerTwoName   String
+  eventDate        DateTime
+  rsvpDeadline     DateTime?
+  ceremonyTitle    String            @default("Ceremonia")
+  ceremonyTime     String            @default("16:00")
+  ceremonyAddress  String            @default("")
+  ceremonyMapUrl   String            @default("")
+  receptionTitle   String            @default("Recepción")
+  receptionTime    String            @default("19:00")
+  receptionAddress String            @default("")
+  receptionMapUrl  String            @default("")
+  theme            String            @default("ROMANTIC_EDITORIAL")
+  themeConfig      String            @default("{}")
+  sectionsConfig   String            @default("{}")
+  contentConfig    String            @default("{}")
+  driveFolderId    String?
+  photosAlbumId    String?
+  mediaProvider    String            @default("HYBRID")
+  photoPin         String?
+  isPrimary        Boolean           @default(false)
+  isActive         Boolean           @default(true)
+  ownerId          String
+  owner            AdminUser         @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  coupleUsers      AdminUser[]       @relation("CoupleEventAccess")
+  tables           EventTable[]
+  guestGroups      GuestGroup[]
+  dispatches       MessageDispatch[]
+  wishes           WishMessage[]
+  mediaAssets      MediaAsset[]
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  @@index([slug])
+}
+
+model EventTable {
+  id        String        @id @default(cuid())
+  eventId   String
+  event     Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name      String
+  capacity  Int           @default(8)
+  shape     String        @default("ROUND")
+  zone      String        @default("Salón Principal")
+  sortOrder Int           @default(0)
+  members   GuestMember[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([eventId])
+}
+
+model GuestGroup {
+  id           String            @id @default(cuid())
+  eventId      String
+  event        Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  token        String            @unique
+  groupName    String
+  category     String            @default("General")
+  email        String?
+  phone        String?
+  maxGuests    Int               @default(1)
+  rsvpStatus   String            @default("PENDING")
+  guestMessage String?
+  viewedAt     DateTime?
+  respondedAt  DateTime?
+  members      GuestMember[]
+  dispatches   MessageDispatch[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@index([eventId, rsvpStatus])
+  @@index([token])
+}
+
+model GuestMember {
+  id              String      @id @default(cuid())
+  groupId         String
+  group           GuestGroup  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  fullName        String
+  isPrimary       Boolean     @default(false)
+  isCompanionSlot Boolean     @default(false)
+  attending       Boolean?
+  tableId         String?
+  seatNumber      Int?
+  table           EventTable? @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@index([groupId])
+  @@index([tableId])
+}
+
+model MessageDispatch {
+  id           String     @id @default(cuid())
+  eventId      String
+  event        Event      @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  groupId      String
+  group        GuestGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  channel      String
+  recipient    String
+  subject      String?
+  messageBody  String
+  status       String     @default("QUEUED")
+  errorMessage String?
+  sentAt       DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@index([eventId, channel, status])
+}
+
+model WishMessage {
+  id         String   @id @default(cuid())
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  authorName String
+  message    String
+  isApproved Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  @@index([eventId, isApproved])
+}
+
+model MediaAsset {
+  id                String   @id @default(cuid())
+  eventId           String
+  event             Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  uploaderName      String
+  caption           String?
+  originalName      String
+  mimeType          String
+  mediaType         String
+  sizeBytes         Int
+  driveFileId       String?
+  driveWebUrl       String?
+  photosMediaItemId String?
+  localFallbackPath String?
+  storageMode       String   @default("GOOGLE_PHOTOS")
+  status            String   @default("APPROVED")
+  createdAt         DateTime @default(now())
+
+  @@index([eventId, status])
+}

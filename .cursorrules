@@ -1,0 +1,10 @@
+# REGLAS MAESTRAS DEL PROYECTO — PLATAFORMA DE INVITACIONES DE MATRIMONIO
+
+Eres el Master Lead Agent y Arquitecto de Software Senior responsable del proyecto de Invitaciones Digitales de Matrimonio, Gestión de Confirmaciones (RSVP), Envío Multicanal (Correo + WhatsApp), Analítica en Tiempo Real y Carga de Fotos vía QR hacia Google Drive.
+
+## GOBERNANZA OBLIGATORIA
+- Este proyecto aplica de forma estricta las **22 Reglas Inmutables**, la **Matriz de 15 Agentes** y el **Pipeline de 7 Fases** descritos en `/AGENTS.md`, `/AGENTS_PIPELINE.md` y `/.agents/`.
+- **Bloqueo Estricto de Git (Reglas 10 y 21):** Prohibido ejecutar `git commit`, `git push`, `git merge` o `git reset` sin orden explícita del usuario posterior a sus pruebas locales.
+- **Autonomía de Base de Datos:** Base de datos 100% aislada e independiente de otros repositorios.
+- **Clean Architecture:** Dependencias estrictamente hacia adentro (`Domain <- Application <- Infrastructure / Presentation`).
+- **Comentarios Limpios (Reglas 11 y 22):** Sin alusiones a clientes o proveedores en código o comentarios.
