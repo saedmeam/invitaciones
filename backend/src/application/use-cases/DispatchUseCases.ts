@@ -14,6 +14,7 @@ export interface SendDispatchDto {
   channel: DispatchChannel;
   groupIds?: string[];
   onlyPending?: boolean;
+  onlyConfirmed?: boolean;
   customMessage?: string;
   subject?: string;
 }
@@ -30,23 +31,51 @@ export class DispatchUseCases {
     private readonly maxDelayMs: number
   ) {}
 
-  private renderTemplate(
+  renderTemplate(
     template: string,
     event: EventEntity,
     group: GuestGroupEntity,
     inviteUrl: string
   ): string {
     const dateStr = event.eventDate.toLocaleDateString('es-EC', {
+      weekday: 'long',
       day: '2-digit',
       month: 'long',
       year: 'numeric',
     });
+
+    const confirmedMembers = group.members.filter((m) => m.attending === true);
+    const confirmedCount = confirmedMembers.length;
+    const attendeesText =
+      confirmedMembers.length > 0
+        ? confirmedMembers.map((m) => m.fullName).join(', ')
+        : group.groupName;
+
+    const tablesText =
+      confirmedMembers.length > 0
+        ? confirmedMembers
+            .map((m) => {
+              const tableLabel = m.tableName
+                ? `${m.tableName}${m.seatNumber ? ` (Puesto #${m.seatNumber})` : ''}`
+                : 'Por confirmar en recepción';
+              return `• ${m.fullName}: ${tableLabel}`;
+            })
+            .join('\n')
+        : '• Por confirmar';
+
     return template
       .replace(/\{nombre\}/gi, group.groupName)
       .replace(/\{cupos\}/gi, String(group.maxGuests))
+      .replace(/\{cupos_confirmados\}/gi, String(confirmedCount))
+      .replace(/\{asistentes\}/gi, attendeesText)
+      .replace(/\{mesas\}/gi, tablesText)
       .replace(/\{link\}/gi, inviteUrl)
       .replace(/\{novios\}/gi, `${event.partnerOneName} & ${event.partnerTwoName}`)
-      .replace(/\{fecha\}/gi, dateStr);
+      .replace(/\{fecha\}/gi, dateStr)
+      .replace(/\{ceremonia_hora\}/gi, event.ceremonyTime || '')
+      .replace(/\{ceremonia_mapa\}/gi, event.ceremonyMapUrl || '')
+      .replace(/\{recepcion_hora\}/gi, event.receptionTime || '')
+      .replace(/\{recepcion_mapa\}/gi, event.receptionMapUrl || '');
   }
 
   private buildEmailHtml(event: EventEntity, group: GuestGroupEntity, inviteUrl: string, bodyText: string) {
@@ -101,6 +130,8 @@ export class DispatchUseCases {
     }
     if (dto.onlyPending) {
       targets = targets.filter((g) => g.rsvpStatus === 'PENDING' || g.rsvpStatus === 'VIEWED');
+    } else if (dto.onlyConfirmed) {
+      targets = targets.filter((g) => g.rsvpStatus === 'CONFIRMED' || g.rsvpStatus === 'PARTIAL');
     }
 
     const defaultTemplate =

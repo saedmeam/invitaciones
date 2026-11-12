@@ -10,16 +10,52 @@ import {
   WishMessageEntity,
 } from '../entities/MediaAndDispatch';
 import { EventTableEntity, TableShape } from '../entities/Table';
+import { OrganizationEntity, OrganizationType } from '../entities/Organization';
+
+export interface IOrganizationRepository {
+  findAll(): Promise<OrganizationEntity[]>;
+  findById(id: string): Promise<OrganizationEntity | null>;
+  findBySlug(slug: string): Promise<OrganizationEntity | null>;
+  create(data: {
+    name: string;
+    slug: string;
+    type: OrganizationType;
+    contactEmail?: string | null;
+    maxEvents: number;
+  }): Promise<OrganizationEntity>;
+  update(
+    id: string,
+    data: Partial<{
+      name: string;
+      type: OrganizationType;
+      contactEmail: string | null;
+      maxEvents: number;
+      isActive: boolean;
+    }>
+  ): Promise<OrganizationEntity>;
+  delete(id: string): Promise<void>;
+}
 
 export interface IAdminUserRepository {
+  findAll(): Promise<AdminUserEntity[]>;
   findByEmail(email: string): Promise<AdminUserEntity | null>;
   findById(id: string): Promise<AdminUserEntity | null>;
-  findCoupleUsersByEvent(eventId: string): Promise<AdminUserEntity[]>;
-  upsertCoupleUser(data: {
-    eventId: string;
+  findCoupleUsersByEvent(eventId: string, createdById?: string): Promise<AdminUserEntity[]>;
+  upsertOrgAdminUser(data: {
+    organizationId: string;
     email: string;
     name: string;
     passwordHash: string;
+    createdById: string;
+  }): Promise<AdminUserEntity>;
+  deleteOrgAdminUser(userId: string, organizationId: string): Promise<void>;
+  upsertCoupleUser(data: {
+    eventId: string;
+    organizationId: string | null;
+    email: string;
+    name: string;
+    passwordHash: string;
+    createdById: string;
   }): Promise<AdminUserEntity>;
   deleteCoupleUser(userId: string, eventId: string): Promise<void>;
 }
@@ -48,6 +84,7 @@ export interface CreateEventInput {
   mediaProvider?: string;
   photoPin?: string | null;
   isPrimary?: boolean;
+  organizationId?: string | null;
   ownerId: string;
 }
 
@@ -56,7 +93,8 @@ export interface UpdateEventInput extends Partial<Omit<CreateEventInput, 'ownerI
 }
 
 export interface IEventRepository {
-  findAllByOwner(ownerId: string): Promise<EventEntity[]>;
+  findAll(organizationId?: string): Promise<EventEntity[]>;
+  findAllByOrganization(organizationId: string): Promise<EventEntity[]>;
   findFeatured(): Promise<EventEntity | null>;
   findById(id: string): Promise<EventEntity | null>;
   findBySlug(slug: string): Promise<EventEntity | null>;

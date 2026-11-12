@@ -112,7 +112,7 @@ export class TableUseCases {
     eventId: string,
     tableId: string,
     actor: AuthActor,
-    dto: { memberId?: string; groupId?: string; seatNumber?: number | null }
+    dto: { memberId?: string; memberIds?: string[]; groupId?: string; seatNumber?: number | null }
   ) {
     await ensureEventAccess(this.eventRepo, eventId, actor);
     const table = await this.tableRepo.findById(tableId);
@@ -123,6 +123,42 @@ export class TableUseCases {
     const occupiedSeats = new Set<number>(
       table.members.map((m) => m.seatNumber).filter((s): s is number => typeof s === 'number')
     );
+
+    if (dto.memberIds && dto.memberIds.length > 0) {
+      const uniqueIds = Array.from(new Set(dto.memberIds));
+      const membersToAssign = [];
+      for (const mId of uniqueIds) {
+        const member = await this.guestRepo.findMemberById(mId);
+        if (!member || member.eventId !== eventId) {
+          throw new AppError('Uno de los invitados no pertenece a este evento', 404, 'NOT_FOUND');
+        }
+        if (member.attending !== true) {
+          throw new AppError(
+            `El invitado "${member.fullName}" aún no confirmó asistencia`,
+            400,
+            'MEMBER_NOT_CONFIRMED'
+          );
+        }
+        membersToAssign.push(member);
+      }
+
+      const alreadyInSameTableCount = membersToAssign.filter((m) => m.tableId === table.id).length;
+      TableDomainService.validateAssignment({
+        table,
+        incomingCount: membersToAssign.length,
+        alreadyInSameTableCount,
+        memberAttending: true,
+      });
+
+      for (const m of membersToAssign) {
+        if (m.tableId === table.id && m.seatNumber) continue;
+        const nextSeat = TableDomainService.findNextFreeSeat(table, occupiedSeats);
+        occupiedSeats.add(nextSeat);
+        await this.tableRepo.assignMember(m.id, table.id, nextSeat);
+      }
+
+      return this.tableRepo.findById(table.id);
+    }
 
     if (dto.memberId) {
       const member = await this.guestRepo.findMemberById(dto.memberId);

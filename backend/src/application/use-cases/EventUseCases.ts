@@ -7,9 +7,14 @@ import {
   EventThemeConfig,
   MediaProviderType,
 } from '../../domain/entities/Event';
-import { IEventRepository } from '../../domain/ports/Repositories';
+import { IEventRepository, IOrganizationRepository } from '../../domain/ports/Repositories';
+import { OrganizationDomainService } from '../../domain/services/OrganizationDomainService';
 import { AppError } from '../../shared/errors/AppError';
-import { AuthActor, ensureEventAccess, ensureSuperAdmin } from '../helpers/AccessControlHelper';
+import {
+  AuthActor,
+  ensureCanManageEventsOrCouples,
+  ensureEventAccess,
+} from '../helpers/AccessControlHelper';
 
 export interface CreateEventDto {
   slug: string;
@@ -35,6 +40,7 @@ export interface CreateEventDto {
   mediaProvider?: MediaProviderType;
   photoPin?: string | null;
   isPrimary?: boolean;
+  organizationId?: string | null;
 }
 
 export interface UpdateEventDto extends Partial<CreateEventDto> {
@@ -42,15 +48,24 @@ export interface UpdateEventDto extends Partial<CreateEventDto> {
 }
 
 export class EventUseCases {
-  constructor(private readonly eventRepo: IEventRepository) {}
+  constructor(
+    private readonly eventRepo: IEventRepository,
+    private readonly orgRepo: IOrganizationRepository
+  ) {}
 
-  async listForActor(actor: AuthActor): Promise<EventEntity[]> {
+  async listForActor(actor: AuthActor, filterOrganizationId?: string): Promise<EventEntity[]> {
     if (actor.role === 'COUPLE') {
       if (!actor.assignedEventId) return [];
       const event = await this.eventRepo.findById(actor.assignedEventId);
       return event ? [event] : [];
     }
-    return this.eventRepo.findAllByOwner(actor.userId);
+
+    if (actor.role === 'ORG_ADMIN') {
+      if (!actor.organizationId) return [];
+      return this.eventRepo.findAllByOrganization(actor.organizationId);
+    }
+
+    return this.eventRepo.findAll(filterOrganizationId);
   }
 
   async getByIdForActor(eventId: string, actor: AuthActor): Promise<EventEntity> {
@@ -70,7 +85,7 @@ export class EventUseCases {
   }
 
   async create(actor: AuthActor, dto: CreateEventDto): Promise<EventEntity> {
-    ensureSuperAdmin(actor);
+    ensureCanManageEventsOrCouples(actor);
 
     const cleanSlug = dto.slug
       .trim()
@@ -87,12 +102,28 @@ export class EventUseCases {
       throw new AppError('Ya existe un evento con ese slug', 409, 'SLUG_CONFLICT');
     }
 
+    let targetOrgId: string | null = null;
+    if (actor.role === 'ORG_ADMIN') {
+      if (!actor.organizationId) {
+        throw new AppError('Usuario sin empresa asignada', 403, 'FORBIDDEN');
+      }
+      targetOrgId = actor.organizationId;
+      const org = await this.orgRepo.findById(targetOrgId);
+      OrganizationDomainService.ensureCanCreateEvent(org!);
+    } else {
+      targetOrgId = dto.organizationId || actor.organizationId || null;
+      if (targetOrgId) {
+        const org = await this.orgRepo.findById(targetOrgId);
+        OrganizationDomainService.ensureCanCreateEvent(org!);
+      }
+    }
+
     const sections: EventSectionsConfig = {
       ...DEFAULT_SECTIONS_CONFIG,
       ...(dto.sectionsConfig || {}),
     };
 
-    return this.eventRepo.create({
+    const created = await this.eventRepo.create({
       slug: cleanSlug,
       title: dto.title.trim(),
       partnerOneName: dto.partnerOneName.trim(),
@@ -115,15 +146,22 @@ export class EventUseCases {
       photosAlbumId: dto.photosAlbumId || null,
       mediaProvider: dto.mediaProvider || 'HYBRID',
       photoPin: dto.photoPin || null,
-      isPrimary: Boolean(dto.isPrimary),
+      isPrimary: actor.role === 'SUPERADMIN' ? Boolean(dto.isPrimary) : false,
+      organizationId: targetOrgId,
       ownerId: actor.userId,
     });
+
+    if (created.isPrimary) {
+      await this.eventRepo.clearPrimaryExcept(created.id);
+    }
+
+    return created;
   }
 
   async update(eventId: string, actor: AuthActor, dto: UpdateEventDto): Promise<EventEntity> {
     const current = await ensureEventAccess(this.eventRepo, eventId, actor);
 
-    if (dto.isPrimary) {
+    if (actor.role === 'SUPERADMIN' && dto.isPrimary) {
       await this.eventRepo.clearPrimaryExcept(eventId);
     }
 
@@ -180,13 +218,13 @@ export class EventUseCases {
       photosAlbumId: dto.photosAlbumId,
       mediaProvider: dto.mediaProvider,
       photoPin: dto.photoPin,
-      isPrimary: dto.isPrimary,
+      isPrimary: actor.role === 'SUPERADMIN' ? dto.isPrimary : undefined,
       isActive: dto.isActive,
     });
   }
 
   async remove(eventId: string, actor: AuthActor): Promise<void> {
-    ensureSuperAdmin(actor);
+    ensureCanManageEventsOrCouples(actor);
     await ensureEventAccess(this.eventRepo, eventId, actor);
     await this.eventRepo.delete(eventId);
   }

@@ -179,6 +179,7 @@ describe('RsvpDomainService (Unit Tests)', () => {
       photoPin: null,
       isPrimary: true,
       isActive: true,
+      organizationId: null,
       ownerId: 'u1',
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -266,7 +267,7 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
         partnerTwoName: 'B',
         eventDate: new Date().toISOString(),
       })
-    ).rejects.toThrow(/administrador principal/i);
+    ).rejects.toThrow(/permisos/i);
 
     await expect(
       container.eventUseCases.getByIdForActor('evento-inexistente', coupleActor)
@@ -336,6 +337,26 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
       })
     ).rejects.toThrow(/confirmaron asistencia/i);
 
+    // Desasignar 1 y probar asignación múltiple (memberIds)
+    await container.tableUseCases.unassignMember(
+      eventId,
+      coupleActor,
+      createdGroup.members[0].id
+    );
+    await container.tableUseCases.unassignMember(
+      eventId,
+      coupleActor,
+      createdGroup.members[1].id
+    );
+
+    const batchAssigned = await container.tableUseCases.assignToTable(
+      eventId,
+      table.id,
+      coupleActor,
+      { memberIds: createdGroup.members.map((m) => m.id) }
+    );
+    expect(batchAssigned?.members).toHaveLength(2);
+
     // Exportar reporte de mesas PDF & Excel
     const pdfReport = await container.tableUseCases.exportSeatingReport(eventId, coupleActor, 'PDF');
     expect(pdfReport.buffer.byteLength).toBeGreaterThan(200);
@@ -381,5 +402,168 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
     expect(updated.members[1].fullName).toBe('Acompañante Editado');
 
     await container.guestUseCases.delete(eventId, g.id, superAdminActor);
+  });
+
+  it('supports B2B2C multi-organization isolation, event quotas, and ORG_ADMIN -> COUPLE hierarchy', async () => {
+    const orgSlug = `planner-qa-${Date.now()}`;
+    const orgEmail = `qa-${Date.now()}@planner.local`;
+    const org = await container.organizationUseCases.create(superAdminActor, {
+      name: 'Planner QA Studio',
+      slug: orgSlug,
+      type: 'PLANNER',
+      maxEvents: 1,
+      adminUser: {
+        name: 'Planner QA',
+        email: orgEmail,
+        password: 'password123',
+      },
+    });
+
+    const orgLogin = await container.authUseCases.login(orgEmail, 'password123');
+    const orgActor: AuthActor = {
+      userId: orgLogin.user.id,
+      email: orgLogin.user.email,
+      role: orgLogin.user.role,
+      organizationId: orgLogin.user.organizationId,
+      assignedEventId: orgLogin.user.assignedEventId,
+    };
+    expect(orgActor.role).toBe('ORG_ADMIN');
+    expect(orgActor.organizationId).toBe(org.id);
+
+    // No puede listar organizaciones del SuperAdmin
+    await expect(container.organizationUseCases.list(orgActor)).rejects.toThrow(/administrador/i);
+
+    // No puede acceder a eventos de otra organización
+    await expect(container.eventUseCases.getByIdForActor(eventId, orgActor)).rejects.toThrow(
+      /otra empresa/i
+    );
+
+    // Crea su primer evento (dentro del cupo maxEvents = 1)
+    const orgEvent = await container.eventUseCases.create(orgActor, {
+      slug: `boda-qa-${Date.now()}`,
+      title: 'Boda Cliente Planner',
+      partnerOneName: 'Sofía',
+      partnerTwoName: 'Mateo',
+      eventDate: '2027-10-10T17:00:00-05:00',
+    });
+    expect(orgEvent.organizationId).toBe(org.id);
+
+    // Alcanzó maxEvents = 1 -> el 2do evento debe ser rechazado
+    await expect(
+      container.eventUseCases.create(orgActor, {
+        slug: `boda-qa-2-${Date.now()}`,
+        title: 'Boda Excedida',
+        partnerOneName: 'A',
+        partnerTwoName: 'B',
+        eventDate: '2027-11-10T17:00:00-05:00',
+      })
+    ).rejects.toThrow(/límite de eventos/i);
+
+    // ORG_ADMIN asigna una cuenta COUPLE a su propia boda
+    const coupleEmail = `novios-${Date.now()}@planner.local`;
+    const coupleUser = await container.authUseCases.upsertCoupleUser(orgEvent.id, orgActor, {
+      name: 'Sofía & Mateo',
+      email: coupleEmail,
+      password: 'password123',
+    });
+    expect(coupleUser.role).toBe('COUPLE');
+
+    // Segundo ORG_ADMIN en la misma empresa NO debe ver la cuenta COUPLE creada por el primer ORG_ADMIN
+    const orgEmail2 = `qa2-${Date.now()}@planner.local`;
+    await container.organizationUseCases.upsertOrgAdmin(org.id, superAdminActor, {
+      name: 'Planner QA 2',
+      email: orgEmail2,
+      password: 'password123',
+    });
+    const orgLogin2 = await container.authUseCases.login(orgEmail2, 'password123');
+    const orgActor2: AuthActor = {
+      userId: orgLogin2.user.id,
+      email: orgLogin2.user.email,
+      role: orgLogin2.user.role,
+      organizationId: orgLogin2.user.organizationId,
+      assignedEventId: orgLogin2.user.assignedEventId,
+    };
+
+    const visibleToCreator = await container.authUseCases.listCoupleUsers(orgEvent.id, orgActor);
+    expect(visibleToCreator.some((u) => u.email === coupleEmail)).toBe(true);
+
+    const visibleToOtherPlanner = await container.authUseCases.listCoupleUsers(
+      orgEvent.id,
+      orgActor2
+    );
+    expect(visibleToOtherPlanner.some((u) => u.email === coupleEmail)).toBe(false);
+
+    // SUPERADMIN sí ve todos los usuarios (ORG_ADMIN y COUPLE)
+    const allUsers = await container.authUseCases.listAllUsers(superAdminActor);
+    expect(allUsers.some((u) => u.email === orgEmail && u.role === 'ORG_ADMIN')).toBe(true);
+    expect(allUsers.some((u) => u.email === coupleEmail && u.role === 'COUPLE')).toBe(true);
+
+    // ORG_ADMIN no puede listar el directorio global de usuarios
+    await expect(container.authUseCases.listAllUsers(orgActor)).rejects.toThrow(/administrador/i);
+
+    // Limpieza
+    await container.organizationUseCases.remove(org.id, superAdminActor);
+  });
+
+  it('renders final WhatsApp reminder template with confirmed slots, assigned tables and maps', async () => {
+    const pub = await container.eventUseCases.getPublicBySlug('joselin-y-santiago-2027');
+    const now = new Date();
+    const mockGroup: GuestGroupEntity = {
+      id: 'g-wa',
+      eventId: pub.id,
+      token: 'tok-wa',
+      groupName: 'Familia Castro',
+      category: 'Familia Novia',
+      email: null,
+      phone: '593990000002',
+      maxGuests: 2,
+      rsvpStatus: 'CONFIRMED',
+      guestMessage: null,
+      viewedAt: now,
+      respondedAt: now,
+      createdAt: now,
+      updatedAt: now,
+      members: [
+        {
+          id: 'm1',
+          groupId: 'g-wa',
+          fullName: 'María Castro',
+          isPrimary: true,
+          isCompanionSlot: false,
+          attending: true,
+          tableId: 't1',
+          seatNumber: 1,
+          tableName: 'Mesa 1 - Familia',
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'm2',
+          groupId: 'g-wa',
+          fullName: 'Jorge Villamar',
+          isPrimary: false,
+          isCompanionSlot: true,
+          attending: true,
+          tableId: 't2',
+          seatNumber: 2,
+          tableName: 'Mesa Principal',
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    };
+
+    const rendered = container.dispatchUseCases.renderTemplate(
+      'Hola {nombre} ({cupos_confirmados} cupos):\n{mesas}\nIglesia: {ceremonia_hora} {ceremonia_mapa}\nRecepción: {recepcion_hora} {recepcion_mapa}\nLink: {link}',
+      pub,
+      mockGroup,
+      'http://localhost:3006/i/tok-wa'
+    );
+
+    expect(rendered).toContain('Familia Castro (2 cupos)');
+    expect(rendered).toContain('• María Castro: Mesa 1 - Familia (Puesto #1)');
+    expect(rendered).toContain('• Jorge Villamar: Mesa Principal (Puesto #2)');
+    expect(rendered).toContain(pub.ceremonyMapUrl);
+    expect(rendered).toContain(pub.receptionMapUrl);
   });
 });

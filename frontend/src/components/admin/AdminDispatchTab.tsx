@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
-import { Mail, MessageCircle, Power, QrCode, Send } from 'lucide-react';
+import { Eye, Mail, MessageCircle, Power, QrCode, Send, Sparkles } from 'lucide-react';
 import { API_BASE_URL, apiFetch } from '@/lib/api';
 import { DispatchLog, GuestGroup, WeddingEvent, WhatsAppState } from '@/types/invitation';
 
@@ -11,6 +11,29 @@ interface AdminDispatchTabProps {
   event: WeddingEvent;
   guests: GuestGroup[];
 }
+
+const INVITE_TEMPLATE =
+  'Hola {nombre}, con mucha alegría te invitamos al matrimonio de {novios} el {fecha}. Hemos reservado {cupos} cupo(s) para ustedes. Confirma tu asistencia aquí: {link}';
+
+const FINAL_SEATING_TEMPLATE = `✨ *¡Falta muy poco para nuestra boda!* ✨
+
+Hola *{nombre}*, qué alegría saber que nos acompañarán en el matrimonio de *{novios}* el *{fecha}*.
+
+👥 *Cupos confirmados:* {cupos_confirmados} ({asistentes})
+
+🪑 *Tu mesa y ubicación asignada:*
+{mesas}
+
+⛪ *Ceremonia:* {ceremonia_hora} hrs
+📍 {ceremonia_mapa}
+
+🥂 *Recepción:* {recepcion_hora} hrs
+📍 {recepcion_mapa}
+
+🔗 *Tu invitación y detalles completos:*
+{link}
+
+¡Nos vemos muy pronto para celebrar juntos! 💍`;
 
 export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
   const [waState, setWaState] = useState<WhatsAppState>({
@@ -21,13 +44,11 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
   });
   const [logs, setLogs] = useState<DispatchLog[]>([]);
   const [channel, setChannel] = useState<'WHATSAPP' | 'EMAIL'>('WHATSAPP');
-  const [onlyPending, setOnlyPending] = useState(true);
+  const [audience, setAudience] = useState<'PENDING' | 'CONFIRMED' | 'ALL'>('PENDING');
   const [subject, setSubject] = useState(
     `Invitación de Boda: ${event.partnerOneName} & ${event.partnerTwoName}`
   );
-  const [message, setMessage] = useState(
-    'Hola {nombre}, con mucha alegría te invitamos al matrimonio de {novios} el {fecha}. Hemos reservado {cupos} cupo(s) para ustedes. Confirma tu asistencia aquí: {link}'
-  );
+  const [message, setMessage] = useState(INVITE_TEMPLATE);
   const [sending, setSending] = useState(false);
 
   const loadLogs = useCallback(async () => {
@@ -56,6 +77,21 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
       socket.disconnect();
     };
   }, [loadLogs]);
+
+  const applyPreset = (preset: 'INVITE' | 'FINAL_SEATING') => {
+    if (preset === 'FINAL_SEATING') {
+      setAudience('CONFIRMED');
+      setChannel('WHATSAPP');
+      setSubject(
+        `Detalles finales y tu mesa — Boda ${event.partnerOneName} & ${event.partnerTwoName}`
+      );
+      setMessage(FINAL_SEATING_TEMPLATE);
+    } else {
+      setAudience('PENDING');
+      setSubject(`Invitación de Boda: ${event.partnerOneName} & ${event.partnerTwoName}`);
+      setMessage(INVITE_TEMPLATE);
+    }
+  };
 
   const handleConnectWa = async () => {
     try {
@@ -94,7 +130,8 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
           auth: true,
           body: JSON.stringify({
             channel,
-            onlyPending,
+            onlyPending: audience === 'PENDING',
+            onlyConfirmed: audience === 'CONFIRMED',
             subject,
             customMessage: message,
           }),
@@ -110,6 +147,62 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
       setSending(false);
     }
   };
+
+  const pendingCount = guests.filter(
+    (g) => g.rsvpStatus === 'PENDING' || g.rsvpStatus === 'VIEWED'
+  ).length;
+  const confirmedCount = guests.filter(
+    (g) => g.rsvpStatus === 'CONFIRMED' || g.rsvpStatus === 'PARTIAL'
+  ).length;
+
+  const sampleGroup =
+    (audience === 'CONFIRMED'
+      ? guests.find((g) => g.rsvpStatus === 'CONFIRMED' || g.rsvpStatus === 'PARTIAL')
+      : guests[0]) || null;
+
+  const previewText = (() => {
+    if (!sampleGroup) return message;
+    const confirmedMembers = sampleGroup.members.filter((m) => m.attending === true);
+    const tablesText =
+      confirmedMembers.length > 0
+        ? confirmedMembers
+            .map((m) => {
+              const tableLabel = m.tableName
+                ? `${m.tableName}${m.seatNumber ? ` (Puesto #${m.seatNumber})` : ''}`
+                : 'Por confirmar en recepción';
+              return `• ${m.fullName}: ${tableLabel}`;
+            })
+            .join('\n')
+        : '• Por confirmar';
+
+    const dateStr = new Date(event.eventDate).toLocaleDateString('es-EC', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3006';
+
+    return message
+      .replace(/\{nombre\}/gi, sampleGroup.groupName)
+      .replace(/\{cupos\}/gi, String(sampleGroup.maxGuests))
+      .replace(/\{cupos_confirmados\}/gi, String(confirmedMembers.length))
+      .replace(
+        /\{asistentes\}/gi,
+        confirmedMembers.length > 0
+          ? confirmedMembers.map((m) => m.fullName).join(', ')
+          : sampleGroup.groupName
+      )
+      .replace(/\{mesas\}/gi, tablesText)
+      .replace(/\{link\}/gi, `${origin}/i/${sampleGroup.token}`)
+      .replace(/\{novios\}/gi, `${event.partnerOneName} & ${event.partnerTwoName}`)
+      .replace(/\{fecha\}/gi, dateStr)
+      .replace(/\{ceremonia_hora\}/gi, event.ceremonyTime || '')
+      .replace(/\{ceremonia_mapa\}/gi, event.ceremonyMapUrl || '')
+      .replace(/\{recepcion_hora\}/gi, event.receptionTime || '')
+      .replace(/\{recepcion_mapa\}/gi, event.receptionMapUrl || '');
+  })();
 
   return (
     <div className="space-y-6">
@@ -134,7 +227,7 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
           <p className="text-xs text-stone-600">
             {waState.connectedPhone
               ? `Conectado con el número: +${waState.connectedPhone}`
-              : 'Conecta tu WhatsApp escaneando el QR para enviar invitaciones automáticas en cola.'}
+              : 'Conecta tu WhatsApp escaneando el QR para enviar invitaciones o recordatorios con mesa asignada.'}
           </p>
           {waState.lastError && <p className="text-xs text-rose-600">{waState.lastError}</p>}
 
@@ -164,84 +257,141 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
         {waState.qrDataUrl && (
           <div className="border border-stone-200 rounded-2xl p-3 bg-stone-50 text-center">
             <img src={waState.qrDataUrl} alt="QR WhatsApp" className="w-44 h-44 mx-auto" />
-            <p className="text-[11px] text-stone-500 mt-1">Escanea desde WhatsApp &gt; Dispositivos vinculados</p>
+            <p className="text-[11px] text-stone-500 mt-1">
+              Escanea desde WhatsApp &gt; Dispositivos vinculados
+            </p>
           </div>
         )}
       </div>
 
-      {/* Formulario de Despacho Masivo / Recordatorio */}
-      <form onSubmit={handleSendBatch} className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
-        <h3 className="font-semibold text-stone-900">Enviar Invitaciones y Recordatorios</h3>
+      {/* Formulario de Despacho + Vista Previa */}
+      <div className="grid lg:grid-cols-3 gap-6 items-start">
+        <form
+          onSubmit={handleSendBatch}
+          className="lg:col-span-2 bg-white rounded-2xl border border-stone-200 p-6 space-y-4"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="font-semibold text-stone-900">Enviar Invitaciones y Recordatorios</h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => applyPreset('INVITE')}
+                className="rounded-xl border border-stone-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-50"
+              >
+                Plantilla Invitación Inicial
+              </button>
+              <button
+                type="button"
+                onClick={() => applyPreset('FINAL_SEATING')}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-900 hover:bg-amber-100"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                Recordatorio Final con Mesa (1 semana antes)
+              </button>
+            </div>
+          </div>
 
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => setChannel('WHATSAPP')}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold border ${
-              channel === 'WHATSAPP'
-                ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
-                : 'border-stone-200 text-stone-600'
-            }`}
-          >
-            <MessageCircle className="h-4 w-4" />
-            WhatsApp Automático
-          </button>
-          <button
-            type="button"
-            onClick={() => setChannel('EMAIL')}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold border ${
-              channel === 'EMAIL'
-                ? 'border-amber-600 bg-amber-50 text-amber-800'
-                : 'border-stone-200 text-stone-600'
-            }`}
-          >
-            <Mail className="h-4 w-4" />
-            Correo Gmail (SMTP + .ics)
-          </button>
-        </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setChannel('WHATSAPP')}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold border ${
+                channel === 'WHATSAPP'
+                  ? 'border-emerald-600 bg-emerald-50 text-emerald-800'
+                  : 'border-stone-200 text-stone-600'
+              }`}
+            >
+              <MessageCircle className="h-4 w-4" />
+              WhatsApp Automático
+            </button>
+            <button
+              type="button"
+              onClick={() => setChannel('EMAIL')}
+              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold border ${
+                channel === 'EMAIL'
+                  ? 'border-amber-600 bg-amber-50 text-amber-800'
+                  : 'border-stone-200 text-stone-600'
+              }`}
+            >
+              <Mail className="h-4 w-4" />
+              Correo Gmail (SMTP + .ics)
+            </button>
+          </div>
 
-        {channel === 'EMAIL' && (
+          <div className="grid sm:grid-cols-3 gap-2">
+            {[
+              { id: 'PENDING', label: `Solo Pendientes / Vistos (${pendingCount})` },
+              { id: 'CONFIRMED', label: `Solo Confirmados (${confirmedCount})` },
+              { id: 'ALL', label: `Todos los Grupos (${guests.length})` },
+            ].map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setAudience(opt.id as 'PENDING' | 'CONFIRMED' | 'ALL')}
+                className={`rounded-xl border px-3 py-2 text-xs font-medium text-left transition ${
+                  audience === opt.id
+                    ? 'border-stone-900 bg-stone-900 text-white'
+                    : 'border-stone-200 text-stone-700 hover:bg-stone-50'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {channel === 'EMAIL' && (
+            <div>
+              <label className="block text-xs font-medium text-stone-600 mb-1">
+                Asunto del Correo
+              </label>
+              <input
+                type="text"
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
+              />
+            </div>
+          )}
+
           <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">Asunto del Correo</label>
-            <input
-              type="text"
-              value={subject}
-              onChange={(e) => setSubject(e.target.value)}
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
+            <label className="block text-xs font-medium text-stone-600 mb-1">
+              Plantilla (variables: {'{nombre}'}, {'{cupos_confirmados}'}, {'{asistentes}'},{' '}
+              {'{mesas}'}, {'{ceremonia_hora}'}, {'{ceremonia_mapa}'}, {'{recepcion_hora}'},{' '}
+              {'{recepcion_mapa}'}, {'{link}'})
+            </label>
+            <textarea
+              rows={9}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              className="w-full rounded-xl border border-stone-300 p-3 text-xs font-mono leading-relaxed"
             />
           </div>
-        )}
 
-        <div>
-          <label className="block text-xs font-medium text-stone-600 mb-1">
-            Plantilla del mensaje (variables: {'{nombre}'}, {'{cupos}'}, {'{link}'}, {'{novios}'}, {'{fecha}'})
-          </label>
-          <textarea
-            rows={4}
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            className="w-full rounded-xl border border-stone-300 p-3 text-sm"
-          />
+          <button
+            type="submit"
+            disabled={sending}
+            className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-5 py-2.5 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-60"
+          >
+            <Send className="h-3.5 w-3.5" />
+            {sending
+              ? 'Enviando lote...'
+              : `Enviar por ${channel === 'WHATSAPP' ? 'WhatsApp' : 'Gmail'}`}
+          </button>
+        </form>
+
+        {/* Vista Previa WhatsApp en vivo */}
+        <div className="bg-white rounded-2xl border border-stone-200 p-5 space-y-3">
+          <div className="flex items-center gap-2 text-xs font-semibold text-stone-800">
+            <Eye className="h-4 w-4 text-emerald-700" />
+            Vista Previa del Mensaje ({sampleGroup?.groupName || 'Ejemplo'})
+          </div>
+          <div className="rounded-2xl bg-[#efeae2] p-4 border border-stone-200">
+            <div className="rounded-2xl bg-[#d9fdd3] p-3.5 text-xs text-stone-900 whitespace-pre-wrap shadow-xs leading-relaxed">
+              {previewText}
+            </div>
+          </div>
         </div>
-
-        <label className="flex items-center gap-2 text-xs text-stone-700 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={onlyPending}
-            onChange={(e) => setOnlyPending(e.target.checked)}
-          />
-          Enviar solo a invitados en estado Pendiente o Visto ({guests.filter((g) => g.rsvpStatus === 'PENDING' || g.rsvpStatus === 'VIEWED').length} grupos)
-        </label>
-
-        <button
-          type="submit"
-          disabled={sending}
-          className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-5 py-2.5 text-xs font-semibold text-white hover:bg-stone-800 disabled:opacity-60"
-        >
-          <Send className="h-3.5 w-3.5" />
-          {sending ? 'Enviando lote...' : `Enviar por ${channel === 'WHATSAPP' ? 'WhatsApp' : 'Gmail'}`}
-        </button>
-      </form>
+      </div>
 
       {/* Historial de envíos */}
       <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">

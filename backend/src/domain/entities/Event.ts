@@ -99,6 +99,8 @@ export interface EventEntity {
   photoPin: string | null;
   isPrimary: boolean;
   isActive: boolean;
+  organizationId: string | null;
+  organizationName?: string | null;
   ownerId: string;
   createdAt: Date;
   updatedAt: Date;

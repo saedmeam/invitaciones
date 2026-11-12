@@ -14,14 +14,60 @@ async function main() {
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
   const passwordHash = await bcrypt.hash(adminPassword, 10);
 
+  const directOrg = await prisma.organization.upsert({
+    where: { slug: 'plataforma-directa' },
+    update: {},
+    create: {
+      name: 'Plataforma Directa',
+      slug: 'plataforma-directa',
+      type: 'DIRECT',
+      contactEmail: adminEmail,
+      maxEvents: 999,
+      isActive: true,
+    },
+  });
+
+  const plannerOrg = await prisma.organization.upsert({
+    where: { slug: 'glamour-planners' },
+    update: {},
+    create: {
+      name: 'Glamour Wedding Planners',
+      slug: 'glamour-planners',
+      type: 'PLANNER',
+      contactEmail: 'planner@invitaciones.local',
+      maxEvents: 10,
+      isActive: true,
+    },
+  });
+
   const admin = await prisma.adminUser.upsert({
     where: { email: adminEmail },
-    update: { passwordHash, role: 'SUPERADMIN' },
+    update: { passwordHash, role: 'SUPERADMIN', organizationId: directOrg.id },
     create: {
       email: adminEmail,
       passwordHash,
       name: 'Administrador Principal',
       role: 'SUPERADMIN',
+      organizationId: directOrg.id,
+    },
+  });
+
+  const plannerPasswordHash = await bcrypt.hash('planner123', 10);
+  await prisma.adminUser.upsert({
+    where: { email: 'planner@invitaciones.local' },
+    update: {
+      passwordHash: plannerPasswordHash,
+      role: 'ORG_ADMIN',
+      organizationId: plannerOrg.id,
+      createdById: admin.id,
+    },
+    create: {
+      email: 'planner@invitaciones.local',
+      passwordHash: plannerPasswordHash,
+      name: 'Organizadora Glamour',
+      role: 'ORG_ADMIN',
+      organizationId: plannerOrg.id,
+      createdById: admin.id,
     },
   });
 
@@ -125,6 +171,7 @@ async function main() {
     update: {
       isPrimary: true,
       mediaProvider: 'HYBRID',
+      organizationId: directOrg.id,
       contentConfig: JSON.stringify(contentConfig),
     },
     create: {
@@ -150,6 +197,7 @@ async function main() {
       photoPin: '',
       isPrimary: true,
       isActive: true,
+      organizationId: directOrg.id,
       ownerId: admin.id,
     },
   });
@@ -161,14 +209,18 @@ async function main() {
     update: {
       passwordHash: couplePasswordHash,
       role: 'COUPLE',
+      organizationId: directOrg.id,
       assignedEventId: event.id,
+      createdById: admin.id,
     },
     create: {
       email: 'pareja@invitaciones.local',
       passwordHash: couplePasswordHash,
       name: 'Joselin & Santiago',
       role: 'COUPLE',
+      organizationId: directOrg.id,
       assignedEventId: event.id,
+      createdById: admin.id,
     },
   });
 

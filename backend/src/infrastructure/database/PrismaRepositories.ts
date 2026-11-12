@@ -21,6 +21,7 @@ import {
   WishMessageEntity,
 } from '../../domain/entities/MediaAndDispatch';
 import { EventTableEntity, TableShape } from '../../domain/entities/Table';
+import { OrganizationEntity, OrganizationType } from '../../domain/entities/Organization';
 import {
   CreateDispatchInput,
   CreateEventInput,
@@ -30,6 +31,7 @@ import {
   IEventRepository,
   IGuestRepository,
   IMediaRepository,
+  IOrganizationRepository,
   ITableRepository,
   IWishRepository,
   SubmitGroupRsvpInput,
@@ -72,6 +74,8 @@ function mapEvent(row: any): EventEntity {
     photoPin: row.photoPin,
     isPrimary: Boolean(row.isPrimary),
     isActive: row.isActive,
+    organizationId: row.organizationId ?? null,
+    organizationName: row.organization?.name ?? null,
     ownerId: row.ownerId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -145,36 +149,207 @@ function mapTable(row: any): EventTableEntity {
   };
 }
 
+function mapOrganization(row: any): OrganizationEntity {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    type: row.type as OrganizationType,
+    contactEmail: row.contactEmail ?? null,
+    maxEvents: row.maxEvents,
+    isActive: row.isActive,
+    eventsCount: row._count?.events ?? row.events?.length ?? 0,
+    admins: (row.users || [])
+      .filter((u: any) => u.role === 'ORG_ADMIN')
+      .map((u: any) => ({ id: u.id, name: u.name, email: u.email })),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+const orgInclude = {
+  _count: { select: { events: true } },
+  users: { select: { id: true, name: true, email: true, role: true } },
+};
+
+export class PrismaOrganizationRepository implements IOrganizationRepository {
+  constructor(private readonly db: PrismaClient) {}
+
+  async findAll(): Promise<OrganizationEntity[]> {
+    const rows = await this.db.organization.findMany({
+      include: orgInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(mapOrganization);
+  }
+
+  async findById(id: string): Promise<OrganizationEntity | null> {
+    const row = await this.db.organization.findUnique({
+      where: { id },
+      include: orgInclude,
+    });
+    return row ? mapOrganization(row) : null;
+  }
+
+  async findBySlug(slug: string): Promise<OrganizationEntity | null> {
+    const row = await this.db.organization.findUnique({
+      where: { slug },
+      include: orgInclude,
+    });
+    return row ? mapOrganization(row) : null;
+  }
+
+  async create(data: {
+    name: string;
+    slug: string;
+    type: OrganizationType;
+    contactEmail?: string | null;
+    maxEvents: number;
+  }): Promise<OrganizationEntity> {
+    const row = await this.db.organization.create({
+      data,
+      include: orgInclude,
+    });
+    return mapOrganization(row);
+  }
+
+  async update(
+    id: string,
+    data: Partial<{
+      name: string;
+      type: OrganizationType;
+      contactEmail: string | null;
+      maxEvents: number;
+      isActive: boolean;
+    }>
+  ): Promise<OrganizationEntity> {
+    const row = await this.db.organization.update({
+      where: { id },
+      data,
+      include: orgInclude,
+    });
+    return mapOrganization(row);
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.db.organization.delete({ where: { id } });
+  }
+}
+
 export class PrismaAdminUserRepository implements IAdminUserRepository {
   constructor(private readonly db: PrismaClient) {}
 
+  private mapUser(row: any): AdminUserEntity {
+    return {
+      id: row.id,
+      email: row.email,
+      passwordHash: row.passwordHash,
+      name: row.name,
+      role: row.role,
+      organizationId: row.organizationId ?? null,
+      organizationName: row.organization?.name ?? null,
+      assignedEventId: row.assignedEventId ?? null,
+      assignedEventSlug: row.assignedEvent?.slug ?? null,
+      createdById: row.createdById ?? null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  async findAll(): Promise<AdminUserEntity[]> {
+    const rows = await this.db.adminUser.findMany({
+      include: {
+        organization: { select: { name: true } },
+        assignedEvent: { select: { slug: true } },
+      },
+      orderBy: [{ role: 'asc' }, { createdAt: 'desc' }],
+    });
+    return rows.map((r) => this.mapUser(r));
+  }
+
   async findByEmail(email: string): Promise<AdminUserEntity | null> {
-    return this.db.adminUser.findUnique({ where: { email } });
+    const row = await this.db.adminUser.findUnique({
+      where: { email },
+      include: {
+        organization: { select: { name: true } },
+        assignedEvent: { select: { slug: true } },
+      },
+    });
+    return row ? this.mapUser(row) : null;
   }
 
   async findById(id: string): Promise<AdminUserEntity | null> {
-    return this.db.adminUser.findUnique({ where: { id } });
+    const row = await this.db.adminUser.findUnique({
+      where: { id },
+      include: {
+        organization: { select: { name: true } },
+        assignedEvent: { select: { slug: true } },
+      },
+    });
+    return row ? this.mapUser(row) : null;
   }
 
-  async findCoupleUsersByEvent(eventId: string): Promise<AdminUserEntity[]> {
-    return this.db.adminUser.findMany({
-      where: { assignedEventId: eventId, role: 'COUPLE' },
+  async findCoupleUsersByEvent(eventId: string, createdById?: string): Promise<AdminUserEntity[]> {
+    const rows = await this.db.adminUser.findMany({
+      where: {
+        assignedEventId: eventId,
+        role: 'COUPLE',
+        ...(createdById ? { createdById } : {}),
+      },
       orderBy: { createdAt: 'desc' },
+    });
+    return rows.map((r) => this.mapUser(r));
+  }
+
+  async upsertOrgAdminUser(data: {
+    organizationId: string;
+    email: string;
+    name: string;
+    passwordHash: string;
+    createdById: string;
+  }): Promise<AdminUserEntity> {
+    const row = await this.db.adminUser.upsert({
+      where: { email: data.email },
+      update: {
+        name: data.name,
+        passwordHash: data.passwordHash,
+        role: 'ORG_ADMIN',
+        organizationId: data.organizationId,
+        assignedEventId: null,
+      },
+      create: {
+        email: data.email,
+        name: data.name,
+        passwordHash: data.passwordHash,
+        role: 'ORG_ADMIN',
+        organizationId: data.organizationId,
+        createdById: data.createdById,
+      },
+    });
+    return this.mapUser(row);
+  }
+
+  async deleteOrgAdminUser(userId: string, organizationId: string): Promise<void> {
+    await this.db.adminUser.deleteMany({
+      where: { id: userId, organizationId, role: 'ORG_ADMIN' },
     });
   }
 
   async upsertCoupleUser(data: {
     eventId: string;
+    organizationId: string | null;
     email: string;
     name: string;
     passwordHash: string;
+    createdById: string;
   }): Promise<AdminUserEntity> {
-    return this.db.adminUser.upsert({
+    const row = await this.db.adminUser.upsert({
       where: { email: data.email },
       update: {
         name: data.name,
         passwordHash: data.passwordHash,
         role: 'COUPLE',
+        organizationId: data.organizationId,
         assignedEventId: data.eventId,
       },
       create: {
@@ -182,9 +357,12 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
         name: data.name,
         passwordHash: data.passwordHash,
         role: 'COUPLE',
+        organizationId: data.organizationId,
         assignedEventId: data.eventId,
+        createdById: data.createdById,
       },
     });
+    return this.mapUser(row);
   }
 
   async deleteCoupleUser(userId: string, eventId: string): Promise<void> {
@@ -197,9 +375,23 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
 export class PrismaEventRepository implements IEventRepository {
   constructor(private readonly db: PrismaClient) {}
 
-  async findAllByOwner(ownerId: string): Promise<EventEntity[]> {
+  private readonly eventInclude = {
+    organization: { select: { name: true } },
+  };
+
+  async findAll(organizationId?: string): Promise<EventEntity[]> {
     const rows = await this.db.event.findMany({
-      where: { ownerId },
+      where: organizationId ? { organizationId } : undefined,
+      include: this.eventInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+    return rows.map(mapEvent);
+  }
+
+  async findAllByOrganization(organizationId: string): Promise<EventEntity[]> {
+    const rows = await this.db.event.findMany({
+      where: { organizationId },
+      include: this.eventInclude,
       orderBy: { createdAt: 'desc' },
     });
     return rows.map(mapEvent);
@@ -208,11 +400,13 @@ export class PrismaEventRepository implements IEventRepository {
   async findFeatured(): Promise<EventEntity | null> {
     const primary = await this.db.event.findFirst({
       where: { isActive: true, isPrimary: true },
+      include: this.eventInclude,
       orderBy: { createdAt: 'desc' },
     });
     if (primary) return mapEvent(primary);
     const fallback = await this.db.event.findFirst({
       where: { isActive: true },
+      include: this.eventInclude,
       orderBy: { createdAt: 'desc' },
     });
     return fallback ? mapEvent(fallback) : null;
@@ -226,22 +420,35 @@ export class PrismaEventRepository implements IEventRepository {
   }
 
   async findById(id: string): Promise<EventEntity | null> {
-    const row = await this.db.event.findUnique({ where: { id } });
+    const row = await this.db.event.findUnique({
+      where: { id },
+      include: this.eventInclude,
+    });
     return row ? mapEvent(row) : null;
   }
 
   async findBySlug(slug: string): Promise<EventEntity | null> {
-    const row = await this.db.event.findUnique({ where: { slug } });
+    const row = await this.db.event.findUnique({
+      where: { slug },
+      include: this.eventInclude,
+    });
     return row ? mapEvent(row) : null;
   }
 
   async create(data: CreateEventInput): Promise<EventEntity> {
-    const row = await this.db.event.create({ data });
+    const row = await this.db.event.create({
+      data,
+      include: this.eventInclude,
+    });
     return mapEvent(row);
   }
 
   async update(id: string, data: UpdateEventInput): Promise<EventEntity> {
-    const row = await this.db.event.update({ where: { id }, data });
+    const row = await this.db.event.update({
+      where: { id },
+      data,
+      include: this.eventInclude,
+    });
     return mapEvent(row);
   }
 

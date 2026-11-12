@@ -101,6 +101,23 @@ export interface WeddingEvent {
   requiresPhotoPin?: boolean;
   isPrimary: boolean;
   isActive: boolean;
+  organizationId: string | null;
+  organizationName?: string | null;
+}
+
+export type OrganizationType = 'DIRECT' | 'PLANNER';
+
+export interface OrganizationItem {
+  id: string;
+  name: string;
+  slug: string;
+  type: OrganizationType;
+  contactEmail: string | null;
+  maxEvents: number;
+  isActive: boolean;
+  eventsCount: number;
+  admins: Array<{ id: string; name: string; email: string }>;
+  createdAt: string;
 }
 
 export interface GuestMember {
@@ -161,6 +178,9 @@ export interface AdminUserInfo {
   email: string;
   name: string;
   role: string;
+  organizationId: string | null;
+  organizationName?: string | null;
+  organizationQuota?: { maxEvents: number; eventsCount: number } | null;
   assignedEventId: string | null;
 }
 

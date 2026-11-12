@@ -51,8 +51,9 @@ npm run dev
 ```
 
 ### Credenciales Iniciales del Panel Admin (`/admin`)
-- **SuperAdmin (Multi-evento y creación de accesos de pareja):** `admin@invitaciones.local` / `admin123`
-- **Usuario de la Pareja (Acceso exclusivo a su boda y selección de mesas):** `pareja@invitaciones.local` / `pareja123`
+- **SuperAdmin (Plataforma SaaS / Multi-Empresa):** `admin@invitaciones.local` / `admin123`
+- **Wedding Planner / Empresa (`ORG_ADMIN` — gestiona N bodas de su agencia):** `planner@invitaciones.local` / `planner123`
+- **Usuario de la Pareja (`COUPLE` — acceso exclusivo a su boda y selección de mesas):** `pareja@invitaciones.local` / `pareja123`
 
 ---
 

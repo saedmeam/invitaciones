@@ -7,17 +7,37 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Organization {
+  id           String      @id @default(cuid())
+  name         String
+  slug         String      @unique
+  type         String      @default("PLANNER")
+  contactEmail String?
+  maxEvents    Int         @default(10)
+  isActive     Boolean     @default(true)
+  users        AdminUser[]
+  events       Event[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
 model AdminUser {
-  id              String   @id @default(cuid())
-  email           String   @unique
+  id              String        @id @default(cuid())
+  email           String        @unique
   passwordHash    String
   name            String
-  role            String   @default("SUPERADMIN")
+  role            String        @default("SUPERADMIN")
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   assignedEventId String?
-  assignedEvent   Event?   @relation("CoupleEventAccess", fields: [assignedEventId], references: [id], onDelete: SetNull)
-  events          Event[]  @relation("EventOwner")
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  assignedEvent   Event?        @relation("CoupleEventAccess", fields: [assignedEventId], references: [id], onDelete: SetNull)
+  createdById     String?
+  events          Event[]       @relation("EventOwner")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([organizationId])
+  @@index([createdById])
 }
 
 model Event {
@@ -46,6 +66,8 @@ model Event {
   photoPin         String?
   isPrimary        Boolean           @default(false)
   isActive         Boolean           @default(true)
+  organizationId   String?
+  organization     Organization?     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ownerId          String
   owner            AdminUser         @relation("EventOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   coupleUsers      AdminUser[]       @relation("CoupleEventAccess")
@@ -58,6 +80,7 @@ model Event {
   updatedAt        DateTime          @updatedAt
 
   @@index([slug])
+  @@index([organizationId])
 }
 
 model EventTable {

@@ -62,6 +62,16 @@ export function createApiRouter(container: AppContainer): Router {
     })
   );
 
+  // Admin Global: Directorio de todos los usuarios (Solo SUPERADMIN)
+  router.get(
+    '/users',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const users = await container.authUseCases.listAllUsers(req.user!);
+      res.json({ users });
+    })
+  );
+
   // Public Invitation & Event
   router.get(
     '/public/featured',
@@ -246,12 +256,109 @@ export function createApiRouter(container: AppContainer): Router {
     })
   );
 
-  // Admin: Events (SUPERADMIN y COUPLE scoping)
+  // Admin: Organizations / Wedding Planners (Solo SUPERADMIN)
+  router.get(
+    '/organizations',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const organizations = await container.organizationUseCases.list(req.user!);
+      res.json({ organizations });
+    })
+  );
+
+  router.post(
+    '/organizations',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(2).max(120),
+        slug: z.string().min(2).max(100),
+        type: z.enum(['DIRECT', 'PLANNER']).optional(),
+        contactEmail: z.string().email().nullable().optional().or(z.literal('')),
+        maxEvents: z.number().int().min(1).max(10000).optional(),
+        adminUser: z
+          .object({
+            name: z.string().min(2).max(120),
+            email: z.string().email(),
+            password: z.string().min(6).max(100),
+          })
+          .optional(),
+      });
+      const body = schema.parse(req.body);
+      const organization = await container.organizationUseCases.create(req.user!, body);
+      res.status(201).json({ organization });
+    })
+  );
+
+  router.put(
+    '/organizations/:orgId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(2).max(120).optional(),
+        type: z.enum(['DIRECT', 'PLANNER']).optional(),
+        contactEmail: z.string().email().nullable().optional().or(z.literal('')),
+        maxEvents: z.number().int().min(1).max(10000).optional(),
+        isActive: z.boolean().optional(),
+      });
+      const body = schema.parse(req.body);
+      const organization = await container.organizationUseCases.update(
+        String(req.params.orgId),
+        req.user!,
+        body
+      );
+      res.json({ organization });
+    })
+  );
+
+  router.delete(
+    '/organizations/:orgId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.organizationUseCases.remove(String(req.params.orgId), req.user!);
+      res.status(204).send();
+    })
+  );
+
+  router.post(
+    '/organizations/:orgId/admins',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(2).max(120),
+        email: z.string().email(),
+        password: z.string().min(6).max(100),
+      });
+      const body = schema.parse(req.body);
+      const admin = await container.organizationUseCases.upsertOrgAdmin(
+        String(req.params.orgId),
+        req.user!,
+        body
+      );
+      res.status(201).json({ admin });
+    })
+  );
+
+  router.delete(
+    '/organizations/:orgId/admins/:userId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.organizationUseCases.deleteOrgAdmin(
+        String(req.params.orgId),
+        String(req.params.userId),
+        req.user!
+      );
+      res.status(204).send();
+    })
+  );
+
+  // Admin: Events (SUPERADMIN, ORG_ADMIN y COUPLE scoping)
   router.get(
     '/events',
     requireAuth,
     asyncHandler(async (req, res) => {
-      const events = await container.eventUseCases.listForActor(req.user!);
+      const orgFilter = req.query.organizationId ? String(req.query.organizationId) : undefined;
+      const events = await container.eventUseCases.listForActor(req.user!, orgFilter);
       res.json({ events });
     })
   );
@@ -284,6 +391,7 @@ export function createApiRouter(container: AppContainer): Router {
         mediaProvider: z.enum(['GOOGLE_PHOTOS', 'GOOGLE_DRIVE', 'HYBRID']).optional(),
         photoPin: z.string().nullable().optional(),
         isPrimary: z.boolean().optional(),
+        organizationId: z.string().nullable().optional(),
       });
       const body = schema.parse(req.body);
       const event = await container.eventUseCases.create(req.user!, body as any);
@@ -548,6 +656,7 @@ export function createApiRouter(container: AppContainer): Router {
     asyncHandler(async (req, res) => {
       const schema = z.object({
         memberId: z.string().optional(),
+        memberIds: z.array(z.string().min(1)).optional(),
         groupId: z.string().optional(),
         seatNumber: z.number().int().min(1).max(30).nullable().optional(),
       });
@@ -602,7 +711,8 @@ export function createApiRouter(container: AppContainer): Router {
         channel: z.enum(['WHATSAPP', 'EMAIL']),
         groupIds: z.array(z.string()).optional(),
         onlyPending: z.boolean().optional(),
-        customMessage: z.string().max(1500).optional(),
+        onlyConfirmed: z.boolean().optional(),
+        customMessage: z.string().max(2500).optional(),
         subject: z.string().max(200).optional(),
       });
       const body = schema.parse(req.body);

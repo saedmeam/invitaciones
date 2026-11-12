@@ -4,6 +4,7 @@ import { DispatchUseCases } from '../application/use-cases/DispatchUseCases';
 import { EventUseCases } from '../application/use-cases/EventUseCases';
 import { GuestUseCases } from '../application/use-cases/GuestUseCases';
 import { MediaAndWishUseCases } from '../application/use-cases/MediaAndWishUseCases';
+import { OrganizationUseCases } from '../application/use-cases/OrganizationUseCases';
 import { RsvpUseCases } from '../application/use-cases/RsvpUseCases';
 import { TableUseCases } from '../application/use-cases/TableUseCases';
 import { env } from '../infrastructure/config/env';
@@ -14,6 +15,7 @@ import {
   PrismaEventRepository,
   PrismaGuestRepository,
   PrismaMediaRepository,
+  PrismaOrganizationRepository,
   PrismaTableRepository,
   PrismaWishRepository,
 } from '../infrastructure/database/PrismaRepositories';
@@ -28,6 +30,7 @@ import {
 
 export interface AppContainer {
   authUseCases: AuthUseCases;
+  organizationUseCases: OrganizationUseCases;
   eventUseCases: EventUseCases;
   guestUseCases: GuestUseCases;
   rsvpUseCases: RsvpUseCases;
@@ -48,6 +51,7 @@ export function buildContainer(overrides?: {
 }): AppContainer {
   const db = overrides?.db || defaultPrisma;
 
+  const orgRepo = new PrismaOrganizationRepository(db);
   const adminRepo = new PrismaAdminUserRepository(db);
   const eventRepo = new PrismaEventRepository(db);
   const guestRepo = new PrismaGuestRepository(db);
@@ -73,8 +77,9 @@ export function buildContainer(overrides?: {
     );
 
   return {
-    authUseCases: new AuthUseCases(adminRepo, eventRepo, env.jwtSecret, env.jwtExpiresIn),
-    eventUseCases: new EventUseCases(eventRepo),
+    authUseCases: new AuthUseCases(adminRepo, eventRepo, orgRepo, env.jwtSecret, env.jwtExpiresIn),
+    organizationUseCases: new OrganizationUseCases(orgRepo, adminRepo),
+    eventUseCases: new EventUseCases(eventRepo, orgRepo),
     guestUseCases: new GuestUseCases(guestRepo, eventRepo),
     rsvpUseCases: new RsvpUseCases(guestRepo),
     tableUseCases: new TableUseCases(eventRepo, tableRepo, guestRepo),

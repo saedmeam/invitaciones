@@ -52,7 +52,11 @@ export interface AdminUserEntity {
   passwordHash: string;
   name: string;
   role: string;
+  organizationId: string | null;
+  organizationName?: string | null;
   assignedEventId: string | null;
+  assignedEventSlug?: string | null;
+  createdById: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

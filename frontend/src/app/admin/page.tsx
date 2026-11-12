@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   BarChart3,
+  Building2,
   Camera,
   Check,
   Copy,
@@ -27,18 +28,30 @@ import {
 import { API_BASE_URL, apiFetch, getStoredToken, setStoredToken } from '@/lib/api';
 import { AdminCustomizerTab } from '@/components/admin/AdminCustomizerTab';
 import { AdminDispatchTab } from '@/components/admin/AdminDispatchTab';
+import {
+  AdminOrganizationsTab,
+  GlobalUserItem,
+} from '@/components/admin/AdminOrganizationsTab';
 import { AdminSeatingTab } from '@/components/admin/AdminSeatingTab';
 import { GuestEditModal } from '@/components/admin/GuestEditModal';
 import {
   AdminUserInfo,
   GuestGroup,
   MediaAsset,
+  OrganizationItem,
   RsvpStats,
   WeddingEvent,
   WishMessage,
 } from '@/types/invitation';
 
-type AdminTab = 'STATS' | 'GUESTS' | 'TABLES' | 'DISPATCH' | 'CUSTOMIZE' | 'MEDIA';
+type AdminTab =
+  | 'STATS'
+  | 'GUESTS'
+  | 'TABLES'
+  | 'DISPATCH'
+  | 'CUSTOMIZE'
+  | 'MEDIA'
+  | 'ORGANIZATIONS';
 
 export default function AdminDashboardPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -48,6 +61,9 @@ export default function AdminDashboardPage() {
   const [loggingIn, setLoggingIn] = useState(false);
 
   const [events, setEvents] = useState<WeddingEvent[]>([]);
+  const [organizations, setOrganizations] = useState<OrganizationItem[]>([]);
+  const [allUsers, setAllUsers] = useState<GlobalUserItem[]>([]);
+  const [orgFilterId, setOrgFilterId] = useState<string>('');
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<AdminTab>('STATS');
 
@@ -83,9 +99,10 @@ export default function AdminDashboardPage() {
     partnerOneName: '',
     partnerTwoName: '',
     eventDate: '2027-09-15T16:00',
+    organizationId: '',
   });
 
-  // Gestión de usuario de la pareja (Solo SUPERADMIN)
+  // Gestión de usuario de la pareja (SUPERADMIN u ORG_ADMIN)
   const [showCouplePanel, setShowCouplePanel] = useState(false);
   const [coupleUsers, setCoupleUsers] = useState<
     Array<{ id: string; email: string; name: string }>
@@ -96,8 +113,14 @@ export default function AdminDashboardPage() {
     password: '',
   });
 
-  const selectedEvent = events.find((e) => e.id === selectedEventId) || null;
+  const visibleEvents = orgFilterId
+    ? events.filter((e) => e.organizationId === orgFilterId)
+    : events;
+  const selectedEvent =
+    visibleEvents.find((e) => e.id === selectedEventId) || visibleEvents[0] || null;
   const isSuperAdmin = currentUser?.role === 'SUPERADMIN';
+  const isOrgAdmin = currentUser?.role === 'ORG_ADMIN';
+  const canManageEvents = isSuperAdmin || isOrgAdmin;
 
   const loadSessionAndEvents = useCallback(async () => {
     try {
@@ -111,6 +134,14 @@ export default function AdminDashboardPage() {
         setSelectedEventId((prev) =>
           prev && evRes.events.some((e) => e.id === prev) ? prev : evRes.events[0].id
         );
+      }
+      if (meRes.user.role === 'SUPERADMIN') {
+        const [orgRes, usersRes] = await Promise.all([
+          apiFetch<{ organizations: OrganizationItem[] }>('/api/organizations', { auth: true }),
+          apiFetch<{ users: GlobalUserItem[] }>('/api/users', { auth: true }),
+        ]);
+        setOrganizations(orgRes.organizations);
+        setAllUsers(usersRes.users);
       }
     } catch {
       setStoredToken(null);
@@ -139,7 +170,7 @@ export default function AdminDashboardPage() {
         setWishes(wRes.wishes);
         setQrInfo(qRes);
 
-        if (role === 'SUPERADMIN') {
+        if (role === 'SUPERADMIN' || role === 'ORG_ADMIN') {
           const cuRes = await apiFetch<{ users: Array<{ id: string; email: string; name: string }> }>(
             `/api/events/${eventId}/couple-users`,
             { auth: true }
@@ -201,6 +232,7 @@ export default function AdminDashboardPage() {
         auth: true,
         body: JSON.stringify({
           ...newEventForm,
+          organizationId: newEventForm.organizationId || undefined,
           eventDate: new Date(newEventForm.eventDate).toISOString(),
         }),
       });
@@ -208,6 +240,7 @@ export default function AdminDashboardPage() {
       setSelectedEventId(res.event.id);
       setShowNewEventForm(false);
       toast.success('Nuevo evento creado');
+      await loadSessionAndEvents();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error creando evento');
     }
@@ -369,6 +402,7 @@ export default function AdminDashboardPage() {
           </button>
           <div className="pt-2 border-t border-stone-100 text-[11px] text-stone-500 space-y-1">
             <p>Demo SuperAdmin: admin@invitaciones.local / admin123</p>
+            <p>Demo Wedding Planner: planner@invitaciones.local / planner123</p>
             <p>Demo Pareja: pareja@invitaciones.local / pareja123</p>
           </div>
         </form>
@@ -395,19 +429,46 @@ export default function AdminDashboardPage() {
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
             <h1 className="font-serif text-2xl font-semibold">
-              {isSuperAdmin ? 'Gestor de Invitaciones' : 'Mi Boda'}
+              {isSuperAdmin
+                ? 'Gestor Multi-Empresa'
+                : isOrgAdmin
+                  ? currentUser?.organizationName || 'Mi Agencia'
+                  : 'Mi Boda'}
             </h1>
 
-            {isSuperAdmin ? (
+            {canManageEvents ? (
               <>
+                {isSuperAdmin && organizations.length > 0 && (
+                  <select
+                    value={orgFilterId}
+                    onChange={(e) => setOrgFilterId(e.target.value)}
+                    className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium"
+                  >
+                    <option value="">Todas las empresas ({events.length})</option>
+                    {organizations.map((org) => (
+                      <option key={org.id} value={org.id}>
+                        {org.name} ({org.eventsCount})
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {isOrgAdmin && currentUser?.organizationQuota && (
+                  <span className="rounded-xl bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700">
+                    Bodas: {currentUser.organizationQuota.eventsCount} /{' '}
+                    {currentUser.organizationQuota.maxEvents}
+                  </span>
+                )}
+
                 <select
-                  value={selectedEventId}
+                  value={selectedEvent?.id || ''}
                   onChange={(e) => setSelectedEventId(e.target.value)}
-                  className="rounded-xl border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm font-medium"
+                  className="rounded-xl border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm font-medium max-w-xs"
                 >
-                  {events.map((ev) => (
+                  {visibleEvents.map((ev) => (
                     <option key={ev.id} value={ev.id}>
-                      {ev.partnerOneName} &amp; {ev.partnerTwoName} ({ev.slug})
+                      {ev.partnerOneName} &amp; {ev.partnerTwoName}
+                      {isSuperAdmin && ev.organizationName ? ` — [${ev.organizationName}]` : ''}
                     </option>
                   ))}
                 </select>
@@ -419,14 +480,16 @@ export default function AdminDashboardPage() {
                   <Plus className="h-3.5 w-3.5" />
                   Nuevo Evento
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCouplePanel((v) => !v)}
-                  className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                >
-                  <KeyRound className="h-3.5 w-3.5" />
-                  Acceso Pareja ({coupleUsers.length})
-                </button>
+                {selectedEvent && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCouplePanel((v) => !v)}
+                    className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                  >
+                    <KeyRound className="h-3.5 w-3.5" />
+                    Acceso Pareja ({coupleUsers.length})
+                  </button>
+                )}
               </>
             ) : (
               selectedEvent && (
@@ -454,12 +517,28 @@ export default function AdminDashboardPage() {
           </div>
         </div>
 
-        {/* Form Nuevo Evento (SuperAdmin) */}
-        {isSuperAdmin && showNewEventForm && (
+        {/* Form Nuevo Evento (SuperAdmin y Wedding Planner) */}
+        {canManageEvents && showNewEventForm && (
           <form
             onSubmit={handleCreateEvent}
-            className="max-w-7xl mx-auto mt-4 pt-4 border-t border-stone-100 grid sm:grid-cols-5 gap-3"
+            className="max-w-7xl mx-auto mt-4 pt-4 border-t border-stone-100 grid sm:grid-cols-6 gap-3"
           >
+            {isSuperAdmin && (
+              <select
+                value={newEventForm.organizationId}
+                onChange={(e) =>
+                  setNewEventForm((p) => ({ ...p, organizationId: e.target.value }))
+                }
+                className="rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
+              >
+                <option value="">Empresa / Cliente Directo (Default)</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name} ({org.eventsCount}/{org.maxEvents})
+                  </option>
+                ))}
+              </select>
+            )}
             <input
               type="text"
               placeholder="Slug (ej. maria-y-juan-2027)"
@@ -500,8 +579,8 @@ export default function AdminDashboardPage() {
           </form>
         )}
 
-        {/* Panel Acceso Propio de la Pareja (SuperAdmin) */}
-        {isSuperAdmin && showCouplePanel && selectedEvent && (
+        {/* Panel Acceso Propio de la Pareja (SuperAdmin y Wedding Planner) */}
+        {canManageEvents && showCouplePanel && selectedEvent && (
           <div className="max-w-7xl mx-auto mt-4 pt-4 border-t border-stone-100 space-y-3">
             <div className="text-xs font-semibold text-stone-700">
               Cuentas con acceso exclusivo a este evento (para que la pareja elija mesas y revise su boda):
@@ -574,6 +653,9 @@ export default function AdminDashboardPage() {
       <nav className="bg-white border-b border-stone-200 px-6">
         <div className="max-w-7xl mx-auto flex overflow-x-auto gap-6 text-sm font-medium">
           {[
+            ...(isSuperAdmin
+              ? [{ id: 'ORGANIZATIONS', label: 'Empresas & Planners', icon: Building2 }]
+              : []),
             { id: 'STATS', label: 'Estadísticas & Detalle', icon: BarChart3 },
             { id: 'GUESTS', label: 'Invitados & RSVP', icon: Users },
             { id: 'TABLES', label: 'Mesas & Puestos', icon: LayoutGrid },
@@ -604,8 +686,16 @@ export default function AdminDashboardPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-6 space-y-6">
-        {!selectedEvent ? (
-          <p className="text-sm text-stone-500">No hay eventos asignados aún.</p>
+        {activeTab === 'ORGANIZATIONS' && isSuperAdmin ? (
+          <AdminOrganizationsTab
+            organizations={organizations}
+            allUsers={allUsers}
+            onRefresh={loadSessionAndEvents}
+          />
+        ) : !selectedEvent ? (
+          <p className="text-sm text-stone-500">
+            No hay eventos creados todavía. Usa el botón &ldquo;+ Nuevo Evento&rdquo; para crear el primero.
+          </p>
         ) : (
           <>
             {/* TAB 1: ESTADÍSTICAS */}
