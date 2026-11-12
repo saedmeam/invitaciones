@@ -54,8 +54,11 @@ export interface AdminUserEntity {
   role: string;
   organizationId: string | null;
   organizationName?: string | null;
+  organizationType?: string | null;
+  organizationMaxEvents?: number | null;
   assignedEventId: string | null;
   assignedEventSlug?: string | null;
+  assignedEventTitle?: string | null;
   createdById: string | null;
   createdAt: Date;
   updatedAt: Date;

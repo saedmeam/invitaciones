@@ -62,6 +62,22 @@ export function createApiRouter(container: AppContainer): Router {
     })
   );
 
+  router.put(
+    '/auth/me',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(2).max(120).optional(),
+        email: z.string().email().optional(),
+        currentPassword: z.string().min(1).optional(),
+        newPassword: z.string().min(6).max(100).optional(),
+      });
+      const body = schema.parse(req.body);
+      const result = await container.authUseCases.updateProfile(req.user!.userId, body);
+      res.json(result);
+    })
+  );
+
   // Admin Global: Directorio de todos los usuarios (Solo SUPERADMIN)
   router.get(
     '/users',
@@ -69,6 +85,38 @@ export function createApiRouter(container: AppContainer): Router {
     asyncHandler(async (req, res) => {
       const users = await container.authUseCases.listAllUsers(req.user!);
       res.json({ users });
+    })
+  );
+
+  // Editar usuario (SUPERADMIN cualquier usuario; ORG_ADMIN solo sus COUPLE creados)
+  router.put(
+    '/users/:userId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(2).max(120).optional(),
+        email: z.string().email().optional(),
+        password: z.string().min(6).max(100).optional().or(z.literal('')),
+        organizationId: z.string().nullable().optional(),
+        assignedEventId: z.string().nullable().optional(),
+      });
+      const body = schema.parse(req.body);
+      const user = await container.authUseCases.updateUser(
+        String(req.params.userId),
+        req.user!,
+        body
+      );
+      res.json({ user });
+    })
+  );
+
+  // Eliminar usuario desde directorio global (Solo SUPERADMIN)
+  router.delete(
+    '/users/:userId',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.authUseCases.deleteUser(String(req.params.userId), req.user!);
+      res.status(204).send();
     })
   );
 

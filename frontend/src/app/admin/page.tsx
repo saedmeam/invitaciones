@@ -34,6 +34,7 @@ import {
 } from '@/components/admin/AdminOrganizationsTab';
 import { AdminSeatingTab } from '@/components/admin/AdminSeatingTab';
 import { GuestEditModal } from '@/components/admin/GuestEditModal';
+import { EditableUser, UserEditModal } from '@/components/admin/UserEditModal';
 import {
   AdminUserInfo,
   GuestGroup,
@@ -112,6 +113,8 @@ export default function AdminDashboardPage() {
     email: '',
     password: '',
   });
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingCoupleUser, setEditingCoupleUser] = useState<EditableUser | null>(null);
 
   const visibleEvents = orgFilterId
     ? events.filter((e) => e.organizationId === orgFilterId)
@@ -500,11 +503,19 @@ export default function AdminDashboardPage() {
             )}
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
             {currentUser && (
-              <span className="text-xs text-stone-500">
-                {currentUser.name} ({currentUser.role})
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowProfileModal(true)}
+                title="Editar mis datos y contraseña"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-100"
+              >
+                <Pencil className="h-3.5 w-3.5 text-amber-700" />
+                <span>
+                  {currentUser.name} ({currentUser.role})
+                </span>
+              </button>
             )}
             <button
               type="button"
@@ -630,6 +641,22 @@ export default function AdminDashboardPage() {
                     <span className="text-stone-500">({cu.email})</span>
                     <button
                       type="button"
+                      onClick={() =>
+                        setEditingCoupleUser({
+                          id: cu.id,
+                          name: cu.name,
+                          email: cu.email,
+                          role: 'COUPLE',
+                          organizationId: selectedEvent.organizationId ?? null,
+                          assignedEventId: selectedEvent.id,
+                        })
+                      }
+                      className="text-amber-700 hover:underline font-medium"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
                       onClick={async () => {
                         await apiFetch(
                           `/api/events/${selectedEvent.id}/couple-users/${cu.id}`,
@@ -689,7 +716,9 @@ export default function AdminDashboardPage() {
         {activeTab === 'ORGANIZATIONS' && isSuperAdmin ? (
           <AdminOrganizationsTab
             organizations={organizations}
+            events={events}
             allUsers={allUsers}
+            currentUserId={currentUser?.id || ''}
             onRefresh={loadSessionAndEvents}
           />
         ) : !selectedEvent ? (
@@ -1197,6 +1226,53 @@ export default function AdminDashboardPage() {
           guest={editingGuest}
           onClose={() => setEditingGuest(null)}
           onSaved={() => loadEventDetails(selectedEvent.id, currentUser?.role)}
+        />
+      )}
+
+      {showProfileModal && currentUser && (
+        <UserEditModal
+          mode="self"
+          user={{
+            id: currentUser.id,
+            name: currentUser.name,
+            email: currentUser.email,
+            role: currentUser.role,
+            organizationId: currentUser.organizationId ?? null,
+            assignedEventId: currentUser.assignedEventId ?? null,
+          }}
+          actorRole={currentUser.role}
+          onClose={() => setShowProfileModal(false)}
+          onSaved={(updated) => {
+            if (updated) {
+              setCurrentUser((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      name: updated.name,
+                      email: updated.email,
+                    }
+                  : prev
+              );
+            }
+            loadSessionAndEvents();
+          }}
+        />
+      )}
+
+      {editingCoupleUser && selectedEvent && (
+        <UserEditModal
+          mode="admin"
+          user={editingCoupleUser}
+          actorRole={currentUser?.role}
+          organizations={organizations}
+          events={visibleEvents}
+          onClose={() => setEditingCoupleUser(null)}
+          onSaved={() => {
+            loadEventDetails(selectedEvent.id, currentUser?.role);
+            if (isSuperAdmin) {
+              loadSessionAndEvents();
+            }
+          }}
         />
       )}
     </div>

@@ -566,4 +566,89 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
     expect(rendered).toContain(pub.ceremonyMapUrl);
     expect(rendered).toContain(pub.receptionMapUrl);
   });
+
+  it('permite editar usuarios, ver creador/paquete en directorio y actualizar perfil propio', async () => {
+    const suffix = Date.now();
+    const superActor = {
+      userId: 'super-test',
+      email: 'admin@invitaciones.local',
+      role: 'SUPERADMIN',
+    };
+
+    const org = await container.organizationUseCases.create(superActor, {
+      name: `Agencia Edit ${suffix}`,
+      slug: `agencia-edit-${suffix}`,
+      type: 'PLANNER',
+      maxEvents: 5,
+      adminUser: {
+        name: 'Planner Edit',
+        email: `planner-edit-${suffix}@test.local`,
+        password: 'password123',
+      },
+    });
+
+    const orgAdmin = org.admins[0];
+    const plannerActor = {
+      userId: orgAdmin.id,
+      email: orgAdmin.email,
+      role: 'ORG_ADMIN',
+      organizationId: org.id,
+    };
+
+    const event = await container.eventUseCases.create(plannerActor, {
+      slug: `boda-edit-${suffix}`,
+      title: 'Boda Edit Test',
+      partnerOneName: 'Ana',
+      partnerTwoName: 'Luis',
+      eventDate: '2027-08-20T16:00:00.000Z',
+    });
+
+    const couple = await container.authUseCases.upsertCoupleUser(event.id, plannerActor, {
+      email: `couple-edit-${suffix}@test.local`,
+      name: 'Ana & Luis',
+      password: 'password123',
+    });
+
+    try {
+      // 1. Directorio global muestra empresa/paquete, boda y creador
+      const allUsers = await container.authUseCases.listAllUsers(superActor);
+      const foundCouple = allUsers.find((u) => u.id === couple.id);
+      expect(foundCouple?.organizationName).toBe(`Agencia Edit ${suffix}`);
+      expect(foundCouple?.organizationType).toBe('PLANNER');
+      expect(foundCouple?.organizationMaxEvents).toBe(5);
+      expect(foundCouple?.createdByName).toBe('Planner Edit');
+      expect(foundCouple?.assignedEventTitle).toBe('Ana & Luis');
+
+      // 2. ORG_ADMIN puede editar su propio COUPLE creado
+      const updatedCouple = await container.authUseCases.updateUser(couple.id, plannerActor, {
+        name: 'Ana & Luis Actualizado',
+        password: 'newpassword123',
+      });
+      expect(updatedCouple.name).toBe('Ana & Luis Actualizado');
+
+      // 3. Usuario COUPLE puede actualizar su propio perfil (con contraseña actual válida)
+      await expect(
+        container.authUseCases.updateProfile(couple.id, {
+          name: 'Ana y Luis Perfil',
+          currentPassword: 'wrongpassword',
+          newPassword: 'perfilpassword123',
+        })
+      ).rejects.toThrow(/incorrecta/i);
+
+      const profileRes = await container.authUseCases.updateProfile(couple.id, {
+        name: 'Ana y Luis Perfil',
+        currentPassword: 'newpassword123',
+        newPassword: 'perfilpassword123',
+      });
+      expect(profileRes.user.name).toBe('Ana y Luis Perfil');
+      expect(profileRes.token).toBeTruthy();
+
+      const loginCheck = await container.authUseCases.login(couple.email, 'perfilpassword123');
+      expect(loginCheck.user.name).toBe('Ana y Luis Perfil');
+    } finally {
+      await container.authUseCases.deleteUser(couple.id, superActor).catch(() => {});
+      await container.authUseCases.deleteUser(orgAdmin.id, superActor).catch(() => {});
+      await container.organizationUseCases.remove(org.id, superActor).catch(() => {});
+    }
+  });
 });

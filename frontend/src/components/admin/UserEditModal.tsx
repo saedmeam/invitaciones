@@ -1,0 +1,260 @@
+'use client';
+
+import React, { useState } from 'react';
+import toast from 'react-hot-toast';
+import { KeyRound, X } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
+import { OrganizationItem, WeddingEvent } from '@/types/invitation';
+
+export interface EditableUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  organizationId?: string | null;
+  assignedEventId?: string | null;
+}
+
+interface UserEditModalProps {
+  mode: 'admin' | 'self';
+  user: EditableUser;
+  actorRole?: string;
+  organizations?: OrganizationItem[];
+  events?: WeddingEvent[];
+  onClose: () => void;
+  onSaved: (updatedUser?: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    organizationId: string | null;
+    organizationName?: string | null;
+    assignedEventId: string | null;
+  }) => void;
+}
+
+export function UserEditModal({
+  mode,
+  user,
+  actorRole,
+  organizations = [],
+  events = [],
+  onClose,
+  onSaved,
+}: UserEditModalProps) {
+  const [name, setName] = useState(user.name);
+  const [email, setEmail] = useState(user.email);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [organizationId, setOrganizationId] = useState(user.organizationId || '');
+  const [assignedEventId, setAssignedEventId] = useState(user.assignedEventId || '');
+  const [saving, setSaving] = useState(false);
+
+  const isSuperAdmin = actorRole === 'SUPERADMIN';
+  const showOrgSelect = mode === 'admin' && isSuperAdmin && user.role !== 'SUPERADMIN';
+  const showEventSelect = mode === 'admin' && user.role === 'COUPLE';
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPassword && newPassword.trim().length < 6) {
+      toast.error('La nueva contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    if (mode === 'self' && newPassword && !currentPassword) {
+      toast.error('Ingresa tu contraseña actual para cambiar la clave');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      if (mode === 'self') {
+        const res = await apiFetch<{
+          token?: string;
+          user: {
+            id: string;
+            name: string;
+            email: string;
+            role: string;
+            organizationId: string | null;
+            organizationName?: string | null;
+            assignedEventId: string | null;
+          };
+        }>('/api/auth/me', {
+          method: 'PUT',
+          auth: true,
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            ...(newPassword.trim()
+              ? { currentPassword, newPassword: newPassword.trim() }
+              : {}),
+          }),
+        });
+        if (res.token && typeof window !== 'undefined') {
+          localStorage.setItem('admin_token', res.token);
+        }
+        toast.success('Tus datos han sido actualizados');
+        onSaved(res.user);
+      } else {
+        const res = await apiFetch<{
+          user: {
+            id: string;
+            name: string;
+            email: string;
+            role: string;
+            organizationId: string | null;
+            organizationName?: string | null;
+            assignedEventId: string | null;
+          };
+        }>(`/api/users/${user.id}`, {
+          method: 'PUT',
+          auth: true,
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            ...(newPassword.trim() ? { password: newPassword.trim() } : {}),
+            ...(showOrgSelect ? { organizationId: organizationId || null } : {}),
+            ...(showEventSelect ? { assignedEventId: assignedEventId || null } : {}),
+          }),
+        });
+        toast.success('Usuario actualizado');
+        onSaved(res.user);
+      }
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al guardar usuario');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-amber-700" />
+            <h3 className="font-semibold text-sm text-stone-900">
+              {mode === 'self' ? 'Mi Perfil y Seguridad' : `Editar Usuario (${user.role})`}
+            </h3>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-stone-700">Nombre</span>
+            <input
+              type="text"
+              required
+              minLength={2}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="text-xs font-medium text-stone-700">Correo electrónico</span>
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
+
+          {showOrgSelect && (
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-stone-700">Empresa / Paquete</span>
+              <select
+                value={organizationId}
+                onChange={(e) => setOrganizationId(e.target.value)}
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
+              >
+                <option value="">Sin empresa asignada</option>
+                {organizations.map((org) => (
+                  <option key={org.id} value={org.id}>
+                    {org.name} ({org.type} · {org.maxEvents} bodas)
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {showEventSelect && (
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-stone-700">Boda Asignada</span>
+              <select
+                value={assignedEventId}
+                onChange={(e) => setAssignedEventId(e.target.value)}
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
+              >
+                <option value="">Sin boda asignada</option>
+                {events.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.partnerOneName} &amp; {ev.partnerTwoName} ({ev.slug})
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <div className="pt-2 border-t border-stone-100 space-y-3">
+            {mode === 'self' && (
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-stone-700">
+                  Contraseña actual (solo si cambias tu clave)
+                </span>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  placeholder="Tu contraseña actual"
+                  className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                />
+              </label>
+            )}
+
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-stone-700">
+                Nueva contraseña (opcional — dejar vacío para mantener la actual)
+              </span>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Mínimo 6 caracteres"
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+              />
+            </label>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-stone-300 px-4 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-xl bg-stone-900 text-white px-4 py-2 text-xs font-semibold hover:bg-stone-800 disabled:opacity-60"
+            >
+              {saving ? 'Guardando...' : 'Guardar Cambios'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}

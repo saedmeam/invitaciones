@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { Building2, Plus, Power, Trash2, UserPlus, Users } from 'lucide-react';
+import { Building2, Pencil, Plus, Power, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
-import { OrganizationItem, OrganizationType } from '@/types/invitation';
+import { OrganizationItem, OrganizationType, WeddingEvent } from '@/types/invitation';
+import { EditableUser, UserEditModal } from './UserEditModal';
 
 export interface GlobalUserItem {
   id: string;
@@ -13,20 +14,30 @@ export interface GlobalUserItem {
   role: string;
   organizationId: string | null;
   organizationName: string | null;
+  organizationType?: string | null;
+  organizationMaxEvents?: number | null;
   assignedEventId: string | null;
   assignedEventSlug: string | null;
+  assignedEventTitle?: string | null;
   createdById: string | null;
+  createdByName?: string | null;
+  createdByEmail?: string | null;
+  createdByRole?: string | null;
 }
 
 interface AdminOrganizationsTabProps {
   organizations: OrganizationItem[];
+  events: WeddingEvent[];
   allUsers: GlobalUserItem[];
+  currentUserId: string;
   onRefresh: () => void;
 }
 
 export function AdminOrganizationsTab({
   organizations,
+  events,
   allUsers,
+  currentUserId,
   onRefresh,
 }: AdminOrganizationsTabProps) {
   const [form, setForm] = useState({
@@ -44,6 +55,29 @@ export function AdminOrganizationsTab({
   const [newAdminByOrg, setNewAdminByOrg] = useState<
     Record<string, { name: string; email: string; password: string }>
   >({});
+  const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
+  const [userSearch, setUserSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [orgFilter, setOrgFilter] = useState('ALL');
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    return allUsers.filter((u) => {
+      if (roleFilter !== 'ALL' && u.role !== roleFilter) return false;
+      if (orgFilter === 'NONE' && u.organizationId) return false;
+      if (orgFilter !== 'ALL' && orgFilter !== 'NONE' && u.organizationId !== orgFilter) {
+        return false;
+      }
+      if (!q) return true;
+      return (
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.organizationName || '').toLowerCase().includes(q) ||
+        (u.assignedEventTitle || '').toLowerCase().includes(q) ||
+        (u.createdByName || '').toLowerCase().includes(q)
+      );
+    });
+  }, [allUsers, userSearch, roleFilter, orgFilter]);
 
   const handleCreateOrg = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -309,19 +343,37 @@ export function AdminOrganizationsTab({
                     <span>
                       <strong>{adm.name}</strong> ({adm.email})
                     </span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await apiFetch(`/api/organizations/${org.id}/admins/${adm.id}`, {
-                          method: 'DELETE',
-                          auth: true,
-                        });
-                        onRefresh();
-                      }}
-                      className="text-rose-600 hover:underline text-[11px]"
-                    >
-                      Quitar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingUser({
+                            id: adm.id,
+                            name: adm.name,
+                            email: adm.email,
+                            role: 'ORG_ADMIN',
+                            organizationId: org.id,
+                            assignedEventId: null,
+                          })
+                        }
+                        className="text-amber-700 hover:underline text-[11px] font-medium"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await apiFetch(`/api/organizations/${org.id}/admins/${adm.id}`, {
+                            method: 'DELETE',
+                            auth: true,
+                          });
+                          onRefresh();
+                        }}
+                        className="text-rose-600 hover:underline text-[11px]"
+                      >
+                        Quitar
+                      </button>
+                    </div>
                   </div>
                 ))}
 
@@ -381,28 +433,69 @@ export function AdminOrganizationsTab({
 
       {/* Directorio Global de Todos los Usuarios (Solo SUPERADMIN) */}
       <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-stone-100 flex items-center gap-2">
-          <Users className="h-4 w-4 text-amber-700" />
-          <h3 className="font-semibold text-sm text-stone-900">
-            Directorio Global de Usuarios ({allUsers.length})
-          </h3>
+        <div className="px-6 py-4 border-b border-stone-100 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-amber-700" />
+            <h3 className="font-semibold text-sm text-stone-900">
+              Directorio Global de Usuarios ({filteredUsers.length} de {allUsers.length})
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="h-3.5 w-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Buscar nombre, correo, empresa..."
+                className="pl-8 pr-3 py-1.5 rounded-xl border border-stone-300 text-xs w-56"
+              />
+            </div>
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="rounded-xl border border-stone-300 px-3 py-1.5 text-xs bg-white"
+            >
+              <option value="ALL">Todos los roles</option>
+              <option value="SUPERADMIN">SUPERADMIN</option>
+              <option value="ORG_ADMIN">ORG_ADMIN (Planners)</option>
+              <option value="COUPLE">COUPLE (Parejas)</option>
+            </select>
+            <select
+              value={orgFilter}
+              onChange={(e) => setOrgFilter(e.target.value)}
+              className="rounded-xl border border-stone-300 px-3 py-1.5 text-xs bg-white"
+            >
+              <option value="ALL">Todas las empresas / paquetes</option>
+              <option value="NONE">Sin empresa asignada</option>
+              {organizations.map((org) => (
+                <option key={org.id} value={org.id}>
+                  {org.name} ({org.type})
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="bg-stone-50 text-stone-600">
               <tr>
-                <th className="px-4 py-3">Nombre</th>
-                <th className="px-4 py-3">Correo</th>
+                <th className="px-4 py-3">Usuario</th>
                 <th className="px-4 py-3">Rol</th>
-                <th className="px-4 py-3">Empresa / Agencia</th>
+                <th className="px-4 py-3">Empresa / Paquete</th>
+                <th className="px-4 py-3">Creado por</th>
                 <th className="px-4 py-3">Boda Asignada</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100">
-              {allUsers.map((u) => (
-                <tr key={u.id}>
-                  <td className="px-4 py-3 font-medium text-stone-900">{u.name}</td>
-                  <td className="px-4 py-3 text-stone-600">{u.email}</td>
+              {filteredUsers.map((u) => (
+                <tr key={u.id} className="hover:bg-stone-50/70">
+                  <td className="px-4 py-3">
+                    <div className="font-medium text-stone-900">{u.name}</div>
+                    <div className="text-[11px] text-stone-500">{u.email}</div>
+                  </td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-0.5 font-semibold text-[11px] ${
@@ -416,14 +509,128 @@ export function AdminOrganizationsTab({
                       {u.role}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-stone-600">{u.organizationName || '—'}</td>
-                  <td className="px-4 py-3 text-stone-600">{u.assignedEventSlug || '—'}</td>
+                  <td className="px-4 py-3">
+                    {u.organizationName ? (
+                      <div>
+                        <span className="font-medium text-stone-800">{u.organizationName}</span>
+                        {u.organizationType && (
+                          <span className="ml-1.5 rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] font-medium text-stone-600">
+                            {u.organizationType === 'PLANNER' ? 'Paquete Planner' : 'Cliente Directo'}
+                            {u.organizationMaxEvents ? ` · ${u.organizationMaxEvents} bodas` : ''}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="rounded-md bg-rose-50 px-2 py-0.5 text-[11px] text-rose-700 font-medium">
+                        Sin empresa asignada
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-stone-600">
+                    {u.createdByName ? (
+                      <div>
+                        <span className="font-medium text-stone-800">{u.createdByName}</span>
+                        {u.createdByRole && (
+                          <span className="ml-1 text-[10px] text-stone-400">
+                            ({u.createdByRole})
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-stone-400">Sistema / Seed</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-stone-600">
+                    {u.assignedEventTitle || u.assignedEventSlug ? (
+                      <div>
+                        <div className="font-medium text-stone-800">
+                          {u.assignedEventTitle || u.assignedEventSlug}
+                        </div>
+                        {u.assignedEventSlug && (
+                          <div className="text-[11px] text-stone-400">{u.assignedEventSlug}</div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-stone-400">—</span>
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <div className="inline-flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        title="Editar usuario y contraseña"
+                        onClick={() =>
+                          setEditingUser({
+                            id: u.id,
+                            name: u.name,
+                            email: u.email,
+                            role: u.role,
+                            organizationId: u.organizationId,
+                            assignedEventId: u.assignedEventId,
+                          })
+                        }
+                        className="inline-flex items-center gap-1 rounded-lg border border-stone-200 px-2.5 py-1 text-[11px] font-medium text-stone-700 hover:bg-stone-100"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Editar
+                      </button>
+                      {u.id !== currentUserId && (
+                        <button
+                          type="button"
+                          title="Eliminar usuario"
+                          onClick={async () => {
+                            if (
+                              !window.confirm(
+                                `¿Eliminar al usuario "${u.name}" (${u.email})? Esta acción no se puede deshacer.`
+                              )
+                            ) {
+                              return;
+                            }
+                            try {
+                              await apiFetch(`/api/users/${u.id}`, {
+                                method: 'DELETE',
+                                auth: true,
+                              });
+                              toast.success('Usuario eliminado');
+                              onRefresh();
+                            } catch (err) {
+                              toast.error(
+                                err instanceof Error ? err.message : 'Error eliminando usuario'
+                              );
+                            }
+                          }}
+                          className="inline-flex items-center justify-center rounded-lg border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
               ))}
+              {filteredUsers.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-stone-400">
+                    No se encontraron usuarios con esos filtros.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
+
+      {editingUser && (
+        <UserEditModal
+          mode="admin"
+          user={editingUser}
+          actorRole="SUPERADMIN"
+          organizations={organizations}
+          events={events}
+          onClose={() => setEditingUser(null)}
+          onSaved={() => onRefresh()}
+        />
+      )}
     </div>
   );
 }

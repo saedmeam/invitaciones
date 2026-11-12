@@ -58,6 +58,17 @@ export interface IAdminUserRepository {
     createdById: string;
   }): Promise<AdminUserEntity>;
   deleteCoupleUser(userId: string, eventId: string): Promise<void>;
+  updateUser(
+    id: string,
+    data: {
+      name?: string;
+      email?: string;
+      passwordHash?: string;
+      organizationId?: string | null;
+      assignedEventId?: string | null;
+    }
+  ): Promise<AdminUserEntity>;
+  deleteUser(id: string): Promise<void>;
 }
 
 export interface CreateEventInput {

@@ -248,20 +248,27 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
       role: row.role,
       organizationId: row.organizationId ?? null,
       organizationName: row.organization?.name ?? null,
+      organizationType: row.organization?.type ?? null,
+      organizationMaxEvents: row.organization?.maxEvents ?? null,
       assignedEventId: row.assignedEventId ?? null,
       assignedEventSlug: row.assignedEvent?.slug ?? null,
+      assignedEventTitle: row.assignedEvent
+        ? `${row.assignedEvent.partnerOneName} & ${row.assignedEvent.partnerTwoName}`
+        : null,
       createdById: row.createdById ?? null,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
   }
 
+  private readonly userInclude = {
+    organization: { select: { name: true, type: true, maxEvents: true } },
+    assignedEvent: { select: { slug: true, partnerOneName: true, partnerTwoName: true } },
+  };
+
   async findAll(): Promise<AdminUserEntity[]> {
     const rows = await this.db.adminUser.findMany({
-      include: {
-        organization: { select: { name: true } },
-        assignedEvent: { select: { slug: true } },
-      },
+      include: this.userInclude,
       orderBy: [{ role: 'asc' }, { createdAt: 'desc' }],
     });
     return rows.map((r) => this.mapUser(r));
@@ -270,10 +277,7 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
   async findByEmail(email: string): Promise<AdminUserEntity | null> {
     const row = await this.db.adminUser.findUnique({
       where: { email },
-      include: {
-        organization: { select: { name: true } },
-        assignedEvent: { select: { slug: true } },
-      },
+      include: this.userInclude,
     });
     return row ? this.mapUser(row) : null;
   }
@@ -281,10 +285,7 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
   async findById(id: string): Promise<AdminUserEntity | null> {
     const row = await this.db.adminUser.findUnique({
       where: { id },
-      include: {
-        organization: { select: { name: true } },
-        assignedEvent: { select: { slug: true } },
-      },
+      include: this.userInclude,
     });
     return row ? this.mapUser(row) : null;
   }
@@ -369,6 +370,34 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
     await this.db.adminUser.deleteMany({
       where: { id: userId, assignedEventId: eventId, role: 'COUPLE' },
     });
+  }
+
+  async updateUser(
+    id: string,
+    data: {
+      name?: string;
+      email?: string;
+      passwordHash?: string;
+      organizationId?: string | null;
+      assignedEventId?: string | null;
+    }
+  ): Promise<AdminUserEntity> {
+    const row = await this.db.adminUser.update({
+      where: { id },
+      data: {
+        ...(data.name !== undefined ? { name: data.name } : {}),
+        ...(data.email !== undefined ? { email: data.email } : {}),
+        ...(data.passwordHash !== undefined ? { passwordHash: data.passwordHash } : {}),
+        ...(data.organizationId !== undefined ? { organizationId: data.organizationId } : {}),
+        ...(data.assignedEventId !== undefined ? { assignedEventId: data.assignedEventId } : {}),
+      },
+      include: this.userInclude,
+    });
+    return this.mapUser(row);
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    await this.db.adminUser.delete({ where: { id } });
   }
 }
 
