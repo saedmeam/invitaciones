@@ -679,6 +679,18 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
       );
       expect(loginAfterChange.user.mustChangePassword).toBe(false);
 
+      // 5. Configuración SMTP por boda y envío con customSmtp
+      const eventWithSmtp = await container.eventUseCases.update(event.id, plannerActor, {
+        smtpHost: 'smtp.gmail.com',
+        smtpPort: 465,
+        smtpSecure: true,
+        smtpUser: 'boda-test@gmail.com',
+        smtpPass: 'app-password-test',
+        smtpFromName: 'Boda Ana & Luis',
+      });
+      expect(eventWithSmtp.smtpUser).toBe('boda-test@gmail.com');
+      expect(eventWithSmtp.smtpFromName).toBe('Boda Ana & Luis');
+
       await container.authUseCases.deleteUser(createdBySuper.id, superActor).catch(() => {});
     } finally {
       await container.authUseCases.deleteUser(couple.id, superActor).catch(() => {});

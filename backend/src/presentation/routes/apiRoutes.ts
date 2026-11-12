@@ -879,6 +879,134 @@ export function createApiRouter(container: AppContainer): Router {
     })
   );
 
+  // Admin: Configuración SMTP de Correo y Prueba en Vivo
+  router.get(
+    '/events/:eventId/email-config',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.getByIdForActor(
+        String(req.params.eventId),
+        req.user!
+      );
+      const isCustomConfigured = Boolean(event.smtpUser && event.smtpPass);
+      const isGlobalConfigured = container.emailProvider.isConfigured(null);
+      res.json({
+        smtp: {
+          host: event.smtpHost || '',
+          port: event.smtpPort || 465,
+          secure: event.smtpSecure !== false,
+          user: event.smtpUser || '',
+          pass: event.smtpPass ? '••••••••' : '',
+          fromName: event.smtpFromName || `${event.partnerOneName} & ${event.partnerTwoName}`,
+          isCustomConfigured,
+          isConfigured: isCustomConfigured || isGlobalConfigured,
+          usingGlobalFallback: !isCustomConfigured && isGlobalConfigured,
+        },
+      });
+    })
+  );
+
+  router.put(
+    '/events/:eventId/email-config',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        host: z.string().optional().or(z.literal('')),
+        port: z.number().int().min(1).max(65535).optional(),
+        secure: z.boolean().optional(),
+        user: z.string().email().optional().or(z.literal('')),
+        pass: z.string().optional().or(z.literal('')),
+        fromName: z.string().max(120).optional().or(z.literal('')),
+      });
+      const body = schema.parse(req.body);
+      const current = await container.eventUseCases.getByIdForActor(
+        String(req.params.eventId),
+        req.user!
+      );
+
+      const pass =
+        body.pass && body.pass !== '••••••••'
+          ? body.pass.replace(/\s+/g, '')
+          : body.pass === ''
+            ? null
+            : current.smtpPass;
+
+      const updated = await container.eventUseCases.update(String(req.params.eventId), req.user!, {
+        smtpHost: body.host !== undefined ? body.host.trim() || null : undefined,
+        smtpPort: body.port !== undefined ? body.port : undefined,
+        smtpSecure: body.secure !== undefined ? body.secure : undefined,
+        smtpUser: body.user !== undefined ? body.user.trim().toLowerCase() || null : undefined,
+        smtpPass: pass,
+        smtpFromName: body.fromName !== undefined ? body.fromName.trim() || null : undefined,
+      });
+
+      const isCustomConfigured = Boolean(updated.smtpUser && updated.smtpPass);
+      res.json({
+        smtp: {
+          host: updated.smtpHost || '',
+          port: updated.smtpPort || 465,
+          secure: updated.smtpSecure !== false,
+          user: updated.smtpUser || '',
+          pass: updated.smtpPass ? '••••••••' : '',
+          fromName: updated.smtpFromName || '',
+          isCustomConfigured,
+          isConfigured: isCustomConfigured || container.emailProvider.isConfigured(null),
+        },
+      });
+    })
+  );
+
+  router.post(
+    '/events/:eventId/email-config/test',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        testEmail: z.string().email(),
+      });
+      const { testEmail } = schema.parse(req.body);
+      const event = await container.eventUseCases.getByIdForActor(
+        String(req.params.eventId),
+        req.user!
+      );
+
+      const customSmtp =
+        event.smtpUser && event.smtpPass
+          ? {
+              host: event.smtpHost || undefined,
+              port: event.smtpPort || undefined,
+              secure: event.smtpSecure !== false,
+              user: event.smtpUser,
+              pass: event.smtpPass,
+              fromName: event.smtpFromName || `${event.partnerOneName} & ${event.partnerTwoName}`,
+            }
+          : null;
+
+      const testHtml = `
+        <div style="font-family:Georgia,serif;max-width:540px;margin:auto;padding:24px;border:1px solid #e7dcc8;border-radius:16px;background:#ffffff;color:#292524;text-align:center;">
+          <h2 style="color:#1c1917;margin-top:0;">Prueba de Envío Exitosa 💌</h2>
+          <p style="font-size:14px;color:#57534e;">Este es un correo de prueba enviado desde el sistema de invitaciones para la boda de:</p>
+          <h3 style="color:#b08d57;font-size:20px;margin:12px 0;">${event.partnerOneName} &amp; ${event.partnerTwoName}</h3>
+          <p style="font-size:12px;color:#78716c;background:#faf7f2;padding:12px;border-radius:8px;display:inline-block;">
+            Servidor SMTP verificado y listo para enviar invitaciones a los invitados.
+          </p>
+        </div>
+      `;
+
+      const result = await container.emailProvider.sendHtml({
+        to: testEmail,
+        subject: `Prueba de correo — Boda ${event.partnerOneName} & ${event.partnerTwoName}`,
+        html: testHtml,
+        smtpConfig: customSmtp,
+      });
+
+      if (!result.ok) {
+        throw new AppError(result.error || 'No se pudo enviar el correo de prueba', 400, 'SMTP_TEST_FAILED');
+      }
+
+      res.json({ ok: true, message: `Correo de prueba enviado a ${testEmail}` });
+    })
+  );
+
   // Admin: Media & Wishes & QR
   router.get(
     '/events/:eventId/media/qr',

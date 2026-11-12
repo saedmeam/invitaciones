@@ -3,9 +3,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
-import { Eye, Mail, MessageCircle, Power, QrCode, Send, Sparkles } from 'lucide-react';
+import { Eye, Mail, MessageCircle, Power, QrCode, Send, Settings, Sparkles } from 'lucide-react';
 import { API_BASE_URL, apiFetch } from '@/lib/api';
 import { DispatchLog, GuestGroup, WeddingEvent, WhatsAppState } from '@/types/invitation';
+import { EmailConfigModal } from './EmailConfigModal';
 
 interface AdminDispatchTabProps {
   event: WeddingEvent;
@@ -50,6 +51,18 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
   );
   const [message, setMessage] = useState(INVITE_TEMPLATE);
   const [sending, setSending] = useState(false);
+  const [showEmailConfigModal, setShowEmailConfigModal] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<{
+    user: string;
+    isCustomConfigured: boolean;
+    isConfigured: boolean;
+    usingGlobalFallback: boolean;
+  }>({
+    user: '',
+    isCustomConfigured: false,
+    isConfigured: false,
+    usingGlobalFallback: false,
+  });
 
   const loadLogs = useCallback(async () => {
     try {
@@ -62,11 +75,28 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
     }
   }, [event.id]);
 
+  const loadEmailStatus = useCallback(async () => {
+    try {
+      const res = await apiFetch<{
+        smtp: {
+          user: string;
+          isCustomConfigured: boolean;
+          isConfigured: boolean;
+          usingGlobalFallback: boolean;
+        };
+      }>(`/api/events/${event.id}/email-config`, { auth: true });
+      setEmailStatus(res.smtp);
+    } catch {
+      // ignore
+    }
+  }, [event.id]);
+
   useEffect(() => {
     apiFetch<WhatsAppState>('/api/whatsapp/status', { auth: true })
       .then(setWaState)
       .catch(() => {});
     loadLogs();
+    loadEmailStatus();
 
     const socket = io(API_BASE_URL);
     socket.on('whatsapp:state', (state: WhatsAppState) => {
@@ -76,7 +106,7 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
     return () => {
       socket.disconnect();
     };
-  }, [loadLogs]);
+  }, [loadLogs, loadEmailStatus]);
 
   const applyPreset = (preset: 'INVITE' | 'FINAL_SEATING') => {
     if (preset === 'FINAL_SEATING') {
@@ -251,6 +281,20 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
                 Desconectar Sesión
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => setShowEmailConfigModal(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs font-semibold text-stone-700 hover:bg-stone-50"
+            >
+              <Settings className="h-3.5 w-3.5 text-amber-700" />
+              <span>Configurar Correo (SMTP / Gmail)</span>
+              {emailStatus.isCustomConfigured && (
+                <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5">
+                  Activo
+                </span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -435,6 +479,17 @@ export function AdminDispatchTab({ event, guests }: AdminDispatchTabProps) {
           </table>
         </div>
       </div>
+
+      {showEmailConfigModal && (
+        <EmailConfigModal
+          eventId={event.id}
+          weddingTitle={`${event.partnerOneName} & ${event.partnerTwoName}`}
+          onClose={() => setShowEmailConfigModal(false)}
+          onSaved={() => {
+            loadEmailStatus();
+          }}
+        />
+      )}
     </div>
   );
 }

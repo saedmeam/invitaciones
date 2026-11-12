@@ -212,11 +212,24 @@ export class DispatchUseCases {
       } else {
         const html = this.buildEmailHtml(event, group, inviteUrl, messageBody);
         const icsContent = RsvpDomainService.buildIcsCalendar(event);
+        const customSmtp =
+          event.smtpUser && event.smtpPass
+            ? {
+                host: event.smtpHost || undefined,
+                port: event.smtpPort || undefined,
+                secure: event.smtpSecure !== undefined && event.smtpSecure !== null ? event.smtpSecure : undefined,
+                user: event.smtpUser,
+                pass: event.smtpPass,
+                fromName: event.smtpFromName || `${event.partnerOneName} & ${event.partnerTwoName}`,
+              }
+            : null;
+
         const sendRes = await this.emailProvider.sendHtml({
           to: recipient,
           subject,
           html,
           icsContent,
+          smtpConfig: customSmtp,
         });
         if (sendRes.ok) {
           await this.dispatchRepo.updateStatus(log.id, 'SENT', null, new Date());

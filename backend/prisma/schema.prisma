@@ -66,6 +66,12 @@ model Event {
   mediaProvider      String            @default("HYBRID")
   googleAccountEmail String?
   googleRefreshToken String?
+  smtpHost           String?
+  smtpPort           Int?
+  smtpSecure         Boolean?          @default(true)
+  smtpUser           String?
+  smtpPass           String?
+  smtpFromName       String?
   photoPin           String?
   isPrimary        Boolean           @default(false)
   isActive         Boolean           @default(true)

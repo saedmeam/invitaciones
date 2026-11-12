@@ -114,6 +114,12 @@ export interface UpdateEventInput extends Partial<Omit<CreateEventInput, 'ownerI
   isActive?: boolean;
   googleAccountEmail?: string | null;
   googleRefreshToken?: string | null;
+  smtpHost?: string | null;
+  smtpPort?: number | null;
+  smtpSecure?: boolean | null;
+  smtpUser?: string | null;
+  smtpPass?: string | null;
+  smtpFromName?: string | null;
 }
 
 export interface IEventRepository {

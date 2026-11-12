@@ -45,6 +45,14 @@ export interface CreateEventDto {
 
 export interface UpdateEventDto extends Partial<CreateEventDto> {
   isActive?: boolean;
+  googleAccountEmail?: string | null;
+  googleRefreshToken?: string | null;
+  smtpHost?: string | null;
+  smtpPort?: number | null;
+  smtpSecure?: boolean | null;
+  smtpUser?: string | null;
+  smtpPass?: string | null;
+  smtpFromName?: string | null;
 }
 
 export class EventUseCases {
@@ -217,6 +225,14 @@ export class EventUseCases {
       driveFolderId: dto.driveFolderId,
       photosAlbumId: dto.photosAlbumId,
       mediaProvider: dto.mediaProvider,
+      googleAccountEmail: dto.googleAccountEmail,
+      googleRefreshToken: dto.googleRefreshToken,
+      smtpHost: dto.smtpHost,
+      smtpPort: dto.smtpPort,
+      smtpSecure: dto.smtpSecure,
+      smtpUser: dto.smtpUser,
+      smtpPass: dto.smtpPass,
+      smtpFromName: dto.smtpFromName,
       photoPin: dto.photoPin,
       isPrimary: actor.role === 'SUPERADMIN' ? dto.isPrimary : undefined,
       isActive: dto.isActive,

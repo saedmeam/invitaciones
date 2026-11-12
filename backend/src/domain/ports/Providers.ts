@@ -23,13 +23,23 @@ export interface IWhatsAppProvider {
   buildFallbackUrl(toPhone: string, message: string): string;
 }
 
+export interface SmtpConfigDto {
+  host?: string;
+  port?: number;
+  secure?: boolean;
+  user: string;
+  pass: string;
+  fromName?: string;
+}
+
 export interface IEmailProvider {
-  isConfigured(): boolean;
+  isConfigured(customSmtp?: SmtpConfigDto | null): boolean;
   sendHtml(params: {
     to: string;
     subject: string;
     html: string;
     icsContent?: string;
+    smtpConfig?: SmtpConfigDto | null;
   }): Promise<{ ok: boolean; error?: string }>;
 }
 

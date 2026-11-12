@@ -98,6 +98,12 @@ export interface EventEntity {
   mediaProvider: MediaProviderType;
   googleAccountEmail?: string | null;
   googleRefreshToken?: string | null;
+  smtpHost?: string | null;
+  smtpPort?: number | null;
+  smtpSecure?: boolean | null;
+  smtpUser?: string | null;
+  smtpPass?: string | null;
+  smtpFromName?: string | null;
   photoPin: string | null;
   isPrimary: boolean;
   isActive: boolean;
