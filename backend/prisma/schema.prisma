@@ -22,19 +22,20 @@ model Organization {
 }
 
 model AdminUser {
-  id              String        @id @default(cuid())
-  email           String        @unique
-  passwordHash    String
-  name            String
-  role            String        @default("SUPERADMIN")
-  organizationId  String?
-  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  assignedEventId String?
-  assignedEvent   Event?        @relation("CoupleEventAccess", fields: [assignedEventId], references: [id], onDelete: SetNull)
-  createdById     String?
-  events          Event[]       @relation("EventOwner")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id                 String        @id @default(cuid())
+  email              String        @unique
+  passwordHash       String
+  name               String
+  role               String        @default("SUPERADMIN")
+  mustChangePassword Boolean       @default(false)
+  organizationId     String?
+  organization       Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  assignedEventId    String?
+  assignedEvent      Event?        @relation("CoupleEventAccess", fields: [assignedEventId], references: [id], onDelete: SetNull)
+  createdById        String?
+  events             Event[]       @relation("EventOwner")
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
 
   @@index([organizationId])
   @@index([createdById])

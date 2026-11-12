@@ -11,6 +11,7 @@ export interface EditableUser {
   name: string;
   email: string;
   role: string;
+  mustChangePassword?: boolean;
   organizationId?: string | null;
   assignedEventId?: string | null;
 }
@@ -49,6 +50,9 @@ export function UserEditModal({
   const [email, setEmail] = useState(user?.email || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [mustChangePassword, setMustChangePassword] = useState(
+    user?.mustChangePassword !== undefined ? user.mustChangePassword : true
+  );
   const [organizationId, setOrganizationId] = useState(user?.organizationId || '');
   const [assignedEventId, setAssignedEventId] = useState(user?.assignedEventId || '');
   const [saving, setSaving] = useState(false);
@@ -99,6 +103,7 @@ export function UserEditModal({
             email: email.trim(),
             password: newPassword.trim(),
             role: effectiveRole,
+            mustChangePassword,
             ...(showOrgSelect ? { organizationId: organizationId || null } : {}),
             ...(showEventSelect ? { assignedEventId: assignedEventId || null } : {}),
           }),
@@ -151,6 +156,7 @@ export function UserEditModal({
             name: name.trim(),
             email: email.trim(),
             ...(newPassword.trim() ? { password: newPassword.trim() } : {}),
+            mustChangePassword,
             ...(showOrgSelect ? { organizationId: organizationId || null } : {}),
             ...(showEventSelect ? { assignedEventId: assignedEventId || null } : {}),
           }),
@@ -308,6 +314,26 @@ export function UserEditModal({
               />
             </label>
           </div>
+
+          {(mode === 'create' || mode === 'admin') && (
+            <label className="flex items-start gap-2.5 rounded-xl border border-stone-200 bg-stone-50 p-3 text-xs cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={mustChangePassword}
+                onChange={(e) => setMustChangePassword(e.target.checked)}
+                className="mt-0.5 rounded border-stone-300 text-amber-700 focus:ring-amber-600"
+              />
+              <div className="space-y-0.5">
+                <span className="font-semibold text-stone-900 block">
+                  Exigir cambio de contraseña al iniciar sesión
+                </span>
+                <span className="text-[11px] text-stone-500 block leading-tight">
+                  Al marcar esta opción, la siguiente vez que el usuario inicie sesión se le obligará a
+                  cambiar su contraseña. Una vez cambiada, esta marca se quitará automáticamente.
+                </span>
+              </div>
+            </label>
+          )}
 
           <div className="flex justify-end gap-2 pt-2">
             <button

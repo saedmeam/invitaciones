@@ -77,7 +77,15 @@ export function buildContainer(overrides?: {
     );
 
   return {
-    authUseCases: new AuthUseCases(adminRepo, eventRepo, orgRepo, env.jwtSecret, env.jwtExpiresIn),
+    authUseCases: new AuthUseCases(
+      adminRepo,
+      eventRepo,
+      orgRepo,
+      emailProvider,
+      env.frontendUrl,
+      env.jwtSecret,
+      env.jwtExpiresIn
+    ),
     organizationUseCases: new OrganizationUseCases(orgRepo, adminRepo),
     eventUseCases: new EventUseCases(eventRepo, orgRepo),
     guestUseCases: new GuestUseCases(guestRepo, eventRepo),

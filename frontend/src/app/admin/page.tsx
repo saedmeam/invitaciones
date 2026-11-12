@@ -33,6 +33,7 @@ import {
   GlobalUserItem,
 } from '@/components/admin/AdminOrganizationsTab';
 import { AdminSeatingTab } from '@/components/admin/AdminSeatingTab';
+import { ForcePasswordChangeModal } from '@/components/admin/ForcePasswordChangeModal';
 import { GuestEditModal } from '@/components/admin/GuestEditModal';
 import { EditableUser, UserEditModal } from '@/components/admin/UserEditModal';
 import {
@@ -1326,6 +1327,24 @@ export default function AdminDashboardPage() {
             if (isSuperAdmin) {
               loadSessionAndEvents();
             }
+          }}
+        />
+      )}
+
+      {currentUser?.mustChangePassword && (
+        <ForcePasswordChangeModal
+          userName={currentUser.name}
+          userEmail={currentUser.email}
+          onPasswordChanged={() => {
+            setCurrentUser((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    mustChangePassword: false,
+                  }
+                : prev
+            );
+            loadSessionAndEvents();
           }}
         />
       )}

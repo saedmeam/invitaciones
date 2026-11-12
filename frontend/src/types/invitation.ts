@@ -178,6 +178,7 @@ export interface AdminUserInfo {
   email: string;
   name: string;
   role: string;
+  mustChangePassword?: boolean;
   organizationId: string | null;
   organizationName?: string | null;
   organizationQuota?: { maxEvents: number; eventsCount: number } | null;

@@ -64,6 +64,7 @@ export interface IAdminUserRepository {
       name?: string;
       email?: string;
       passwordHash?: string;
+      mustChangePassword?: boolean;
       organizationId?: string | null;
       assignedEventId?: string | null;
     }
@@ -73,6 +74,7 @@ export interface IAdminUserRepository {
     name: string;
     passwordHash: string;
     role: string;
+    mustChangePassword?: boolean;
     organizationId: string | null;
     assignedEventId: string | null;
     createdById: string;

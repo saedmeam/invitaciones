@@ -13,6 +13,7 @@ export interface GlobalUserItem {
   email: string;
   name: string;
   role: string;
+  mustChangePassword?: boolean;
   organizationId: string | null;
   organizationName: string | null;
   organizationType?: string | null;
@@ -542,6 +543,7 @@ export function AdminOrganizationsTab({
                 <th className="px-4 py-3">Empresa / Paquete</th>
                 <th className="px-4 py-3">Creado por</th>
                 <th className="px-4 py-3">Boda Asignada</th>
+                <th className="px-4 py-3 text-center">Cambiar Clave</th>
                 <th className="px-4 py-3 text-right">Acciones</th>
               </tr>
             </thead>
@@ -610,6 +612,49 @@ export function AdminOrganizationsTab({
                       <span className="text-stone-400">—</span>
                     )}
                   </td>
+                  <td className="px-4 py-3 text-center">
+                    <label className="inline-flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(u.mustChangePassword)}
+                        onChange={async (e) => {
+                          const nextVal = e.target.checked;
+                          try {
+                            await apiFetch(`/api/users/${u.id}`, {
+                              method: 'PUT',
+                              auth: true,
+                              body: JSON.stringify({ mustChangePassword: nextVal }),
+                            });
+                            toast.success(
+                              nextVal
+                                ? 'Se exigirá cambio de clave al iniciar sesión'
+                                : 'Se desmarcó la exigencia de cambio de clave'
+                            );
+                            onRefresh();
+                          } catch (err) {
+                            toast.error(
+                              err instanceof Error ? err.message : 'Error actualizando estado'
+                            );
+                          }
+                        }}
+                        className="rounded border-stone-300 text-amber-700 focus:ring-amber-600"
+                        title={
+                          u.mustChangePassword
+                            ? 'Pendiente de cambio de clave'
+                            : 'Marcar para exigir cambio de clave en el próximo login'
+                        }
+                      />
+                      <span
+                        className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                          u.mustChangePassword
+                            ? 'bg-amber-100 text-amber-900'
+                            : 'bg-stone-100 text-stone-500'
+                        }`}
+                      >
+                        {u.mustChangePassword ? 'Pendiente' : 'Al día'}
+                      </span>
+                    </label>
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-1.5">
                       <button
@@ -621,6 +666,7 @@ export function AdminOrganizationsTab({
                             name: u.name,
                             email: u.email,
                             role: u.role,
+                            mustChangePassword: Boolean(u.mustChangePassword),
                             organizationId: u.organizationId,
                             assignedEventId: u.assignedEventId,
                           })

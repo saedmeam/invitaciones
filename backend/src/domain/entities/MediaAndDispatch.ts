@@ -52,6 +52,7 @@ export interface AdminUserEntity {
   passwordHash: string;
   name: string;
   role: string;
+  mustChangePassword?: boolean;
   organizationId: string | null;
   organizationName?: string | null;
   organizationType?: string | null;

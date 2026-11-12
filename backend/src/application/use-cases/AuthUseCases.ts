@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { IEmailProvider } from '../../domain/ports/Providers';
 import {
   IAdminUserRepository,
   IEventRepository,
@@ -27,6 +28,8 @@ export class AuthUseCases {
     private readonly adminRepo: IAdminUserRepository,
     private readonly eventRepo: IEventRepository,
     private readonly orgRepo: IOrganizationRepository,
+    private readonly emailProvider: IEmailProvider,
+    private readonly frontendUrl: string,
     private readonly jwtSecret: string,
     private readonly jwtExpiresIn: string
   ) {}
@@ -38,6 +41,7 @@ export class AuthUseCases {
       email: string;
       name: string;
       role: string;
+      mustChangePassword: boolean;
       organizationId: string | null;
       organizationName: string | null;
       assignedEventId: string | null;
@@ -80,6 +84,7 @@ export class AuthUseCases {
         email: user.email,
         name: user.name,
         role: user.role,
+        mustChangePassword: Boolean(user.mustChangePassword),
         organizationId: user.organizationId || null,
         organizationName,
         assignedEventId: user.assignedEventId || null,
@@ -109,6 +114,7 @@ export class AuthUseCases {
       email: user.email,
       name: user.name,
       role: user.role,
+      mustChangePassword: Boolean(user.mustChangePassword),
       organizationId: user.organizationId || null,
       organizationName: user.organizationName || null,
       organizationQuota: orgInfo,
@@ -127,6 +133,7 @@ export class AuthUseCases {
         email: u.email,
         name: u.name,
         role: u.role,
+        mustChangePassword: Boolean(u.mustChangePassword),
         organizationId: u.organizationId,
         organizationName: u.organizationName || null,
         organizationType: u.organizationType || null,
@@ -269,6 +276,7 @@ export class AuthUseCases {
       name: dto.name !== undefined ? dto.name.trim() : undefined,
       email: nextEmail,
       passwordHash,
+      mustChangePassword: passwordHash ? false : undefined,
     });
 
     const payload: AuthTokenPayload = {
@@ -290,6 +298,7 @@ export class AuthUseCases {
         email: updated.email,
         name: updated.name,
         role: updated.role,
+        mustChangePassword: Boolean(updated.mustChangePassword),
         organizationId: updated.organizationId || null,
         organizationName: updated.organizationName || null,
         assignedEventId: updated.assignedEventId || null,
@@ -304,6 +313,7 @@ export class AuthUseCases {
       email: string;
       password: string;
       role: 'SUPERADMIN' | 'ORG_ADMIN' | 'COUPLE';
+      mustChangePassword?: boolean;
       organizationId?: string | null;
       assignedEventId?: string | null;
     }
@@ -368,16 +378,45 @@ export class AuthUseCases {
       email: cleanEmail,
       passwordHash,
       role: dto.role,
+      mustChangePassword: dto.mustChangePassword ?? true,
       organizationId: dto.role === 'SUPERADMIN' ? orgId : orgId,
       assignedEventId: eventId,
       createdById: actor.userId,
     });
+
+    // Envío del correo de bienvenida con credenciales
+    if (this.emailProvider.isConfigured()) {
+      const loginUrl = `${this.frontendUrl}/admin`;
+      const html = `
+        <div style="font-family:sans-serif;max-width:560px;margin:auto;padding:24px;border:1px solid #e7e5e4;border-radius:16px;">
+          <h2 style="color:#1c1917;margin-top:0;">Bienvenido a tu Panel de Invitaciones</h2>
+          <p style="color:#44403c;font-size:14px;">Hola <strong>${created.name}</strong>, se ha creado tu cuenta con los siguientes datos de acceso:</p>
+          <div style="background:#f5f5f4;padding:16px;border-radius:12px;margin:20px 0;font-size:14px;color:#1c1917;">
+            <p style="margin:4px 0;"><strong>Usuario / Correo:</strong> ${created.email}</p>
+            <p style="margin:4px 0;"><strong>Contraseña temporal:</strong> ${dto.password.trim()}</p>
+            <p style="margin:4px 0;"><strong>Rol:</strong> ${created.role}</p>
+          </div>
+          <p style="color:#78716c;font-size:12px;">Por seguridad, se te solicitará cambiar tu contraseña la primera vez que inicies sesión.</p>
+          <div style="text-align:center;margin-top:24px;">
+            <a href="${loginUrl}" style="background:#1c1917;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:10px;font-weight:600;font-size:14px;display:inline-block;">Ingresar al Panel</a>
+          </div>
+        </div>
+      `;
+      await this.emailProvider
+        .sendHtml({
+          to: created.email,
+          subject: 'Tus credenciales de acceso — Plataforma de Invitaciones',
+          html,
+        })
+        .catch(() => {});
+    }
 
     return {
       id: created.id,
       email: created.email,
       name: created.name,
       role: created.role,
+      mustChangePassword: Boolean(created.mustChangePassword),
       organizationId: created.organizationId,
       organizationName: created.organizationName || null,
       organizationType: created.organizationType || null,
@@ -396,6 +435,7 @@ export class AuthUseCases {
       name?: string;
       email?: string;
       password?: string;
+      mustChangePassword?: boolean;
       organizationId?: string | null;
       assignedEventId?: string | null;
     }
@@ -481,6 +521,7 @@ export class AuthUseCases {
       name: dto.name !== undefined ? dto.name.trim() : undefined,
       email: nextEmail,
       passwordHash,
+      mustChangePassword: dto.mustChangePassword,
       organizationId: nextOrganizationId,
       assignedEventId: nextEventId,
     });
@@ -490,6 +531,7 @@ export class AuthUseCases {
       email: updated.email,
       name: updated.name,
       role: updated.role,
+      mustChangePassword: Boolean(updated.mustChangePassword),
       organizationId: updated.organizationId,
       organizationName: updated.organizationName || null,
       organizationType: updated.organizationType || null,

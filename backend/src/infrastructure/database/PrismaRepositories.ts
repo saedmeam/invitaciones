@@ -248,6 +248,7 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
       passwordHash: row.passwordHash,
       name: row.name,
       role: row.role,
+      mustChangePassword: Boolean(row.mustChangePassword),
       organizationId: row.organizationId ?? null,
       organizationName: row.organization?.name ?? null,
       organizationType: row.organization?.type ?? null,
@@ -380,6 +381,7 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
       name?: string;
       email?: string;
       passwordHash?: string;
+      mustChangePassword?: boolean;
       organizationId?: string | null;
       assignedEventId?: string | null;
     }
@@ -390,6 +392,7 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
         ...(data.name !== undefined ? { name: data.name } : {}),
         ...(data.email !== undefined ? { email: data.email } : {}),
         ...(data.passwordHash !== undefined ? { passwordHash: data.passwordHash } : {}),
+        ...(data.mustChangePassword !== undefined ? { mustChangePassword: data.mustChangePassword } : {}),
         ...(data.organizationId !== undefined ? { organizationId: data.organizationId } : {}),
         ...(data.assignedEventId !== undefined ? { assignedEventId: data.assignedEventId } : {}),
       },
@@ -403,6 +406,7 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
     name: string;
     passwordHash: string;
     role: string;
+    mustChangePassword?: boolean;
     organizationId: string | null;
     assignedEventId: string | null;
     createdById: string;
@@ -413,6 +417,7 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
         name: data.name,
         passwordHash: data.passwordHash,
         role: data.role,
+        mustChangePassword: data.mustChangePassword ?? false,
         organizationId: data.organizationId,
         assignedEventId: data.assignedEventId,
         createdById: data.createdById,

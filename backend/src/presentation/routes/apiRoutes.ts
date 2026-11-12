@@ -99,6 +99,7 @@ export function createApiRouter(container: AppContainer): Router {
         email: z.string().email(),
         password: z.string().min(6).max(100),
         role: z.enum(['SUPERADMIN', 'ORG_ADMIN', 'COUPLE']),
+        mustChangePassword: z.boolean().optional(),
         organizationId: z.string().nullable().optional(),
         assignedEventId: z.string().nullable().optional(),
       });
@@ -117,6 +118,7 @@ export function createApiRouter(container: AppContainer): Router {
         name: z.string().min(2).max(120).optional(),
         email: z.string().email().optional(),
         password: z.string().min(6).max(100).optional().or(z.literal('')),
+        mustChangePassword: z.boolean().optional(),
         organizationId: z.string().nullable().optional(),
         assignedEventId: z.string().nullable().optional(),
       });

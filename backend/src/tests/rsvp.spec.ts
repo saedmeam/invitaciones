@@ -650,15 +650,35 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
       const loginCheck = await container.authUseCases.login(couple.email, 'perfilpassword123');
       expect(loginCheck.user.name).toBe('Ana y Luis Perfil');
 
-      // 4. SUPERADMIN puede crear usuario directamente via createUser
+      // 4. SUPERADMIN puede crear usuario directamente via createUser con mustChangePassword
       const createdBySuper = await container.authUseCases.createUser(superActor, {
         name: 'Planner Directo',
         email: `planner-direct-${suffix}@test.local`,
         password: 'password123',
         role: 'ORG_ADMIN',
+        mustChangePassword: true,
         organizationId: org.id,
       });
       expect(createdBySuper.organizationId).toBe(org.id);
+      expect(createdBySuper.mustChangePassword).toBe(true);
+
+      const loginDirect = await container.authUseCases.login(
+        `planner-direct-${suffix}@test.local`,
+        'password123'
+      );
+      expect(loginDirect.user.mustChangePassword).toBe(true);
+
+      // Al cambiar su contraseña, el check mustChangePassword se apaga automáticamente
+      await container.authUseCases.updateProfile(createdBySuper.id, {
+        currentPassword: 'password123',
+        newPassword: 'newsecurepassword123',
+      });
+      const loginAfterChange = await container.authUseCases.login(
+        `planner-direct-${suffix}@test.local`,
+        'newsecurepassword123'
+      );
+      expect(loginAfterChange.user.mustChangePassword).toBe(false);
+
       await container.authUseCases.deleteUser(createdBySuper.id, superActor).catch(() => {});
     } finally {
       await container.authUseCases.deleteUser(couple.id, superActor).catch(() => {});
