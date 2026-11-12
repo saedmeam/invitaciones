@@ -68,6 +68,15 @@ export interface IAdminUserRepository {
       assignedEventId?: string | null;
     }
   ): Promise<AdminUserEntity>;
+  createUser(data: {
+    email: string;
+    name: string;
+    passwordHash: string;
+    role: string;
+    organizationId: string | null;
+    assignedEventId: string | null;
+    createdById: string;
+  }): Promise<AdminUserEntity>;
   deleteUser(id: string): Promise<void>;
 }
 
@@ -101,6 +110,8 @@ export interface CreateEventInput {
 
 export interface UpdateEventInput extends Partial<Omit<CreateEventInput, 'ownerId'>> {
   isActive?: boolean;
+  googleAccountEmail?: string | null;
+  googleRefreshToken?: string | null;
 }
 
 export interface IEventRepository {

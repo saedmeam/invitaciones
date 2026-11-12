@@ -60,10 +60,12 @@ model Event {
   themeConfig      String            @default("{}")
   sectionsConfig   String            @default("{}")
   contentConfig    String            @default("{}")
-  driveFolderId    String?
-  photosAlbumId    String?
-  mediaProvider    String            @default("HYBRID")
-  photoPin         String?
+  driveFolderId      String?
+  photosAlbumId      String?
+  mediaProvider      String            @default("HYBRID")
+  googleAccountEmail String?
+  googleRefreshToken String?
+  photoPin           String?
   isPrimary        Boolean           @default(false)
   isActive         Boolean           @default(true)
   organizationId   String?

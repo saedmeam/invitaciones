@@ -37,11 +37,29 @@ export class MediaAndWishUseCases {
       uploadUrl,
       qrDataUrl,
       qrSvg,
-      driveConfigured: this.driveProvider.isConfigured(),
+      driveConfigured: this.driveProvider.isConfigured(event.googleRefreshToken),
+      googleOAuthAppConfigured: this.driveProvider.hasOAuthApp(),
+      googleAccountEmail: event.googleAccountEmail || null,
+      googlePerEventConnected: Boolean(event.googleRefreshToken),
       driveFolderId: event.driveFolderId,
       photosAlbumId: event.photosAlbumId,
       mediaProvider: event.mediaProvider,
     };
+  }
+
+  async saveGoogleConnection(eventId: string, email: string | null, refreshToken: string) {
+    await this.eventRepo.update(eventId, {
+      googleRefreshToken: refreshToken,
+      googleAccountEmail: email,
+    });
+  }
+
+  async disconnectGoogleAccount(eventId: string, actor: AuthActor) {
+    await ensureEventAccess(this.eventRepo, eventId, actor);
+    await this.eventRepo.update(eventId, {
+      googleRefreshToken: null,
+      googleAccountEmail: null,
+    });
   }
 
   async uploadMediaBySlug(params: {
@@ -87,6 +105,7 @@ export class MediaAndWishUseCases {
         folderId: event.driveFolderId,
         photosAlbumId: event.photosAlbumId,
         albumTitle: `${event.partnerOneName} & ${event.partnerTwoName}`,
+        refreshToken: event.googleRefreshToken,
       });
 
       if (uploadResult.photosAlbumId && uploadResult.photosAlbumId !== event.photosAlbumId) {
@@ -138,7 +157,7 @@ export class MediaAndWishUseCases {
   }
 
   async deleteMedia(eventId: string, mediaId: string, actor: AuthActor) {
-    await ensureEventAccess(this.eventRepo, eventId, actor);
+    const event = await ensureEventAccess(this.eventRepo, eventId, actor);
     const media = await this.mediaRepo.findById(mediaId);
     if (!media || media.eventId !== eventId) {
       throw new AppError('Archivo no encontrado', 404, 'NOT_FOUND');
@@ -147,6 +166,7 @@ export class MediaAndWishUseCases {
       storageMode: media.storageMode,
       driveFileId: media.driveFileId,
       localFallbackPath: media.localFallbackPath,
+      refreshToken: event.googleRefreshToken,
     });
     await this.mediaRepo.delete(mediaId);
   }
@@ -156,11 +176,13 @@ export class MediaAndWishUseCases {
     if (!media) {
       throw new AppError('Archivo no encontrado', 404, 'NOT_FOUND');
     }
+    const event = await this.eventRepo.findById(media.eventId);
     const stream = await this.driveProvider.getFileStream({
       storageMode: media.storageMode,
       driveFileId: media.driveFileId,
       photosMediaItemId: media.photosMediaItemId,
       localFallbackPath: media.localFallbackPath,
+      refreshToken: event?.googleRefreshToken,
     });
     return { media, stream };
   }

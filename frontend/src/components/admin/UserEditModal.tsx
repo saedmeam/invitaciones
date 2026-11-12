@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import toast from 'react-hot-toast';
-import { KeyRound, X } from 'lucide-react';
+import { KeyRound, UserPlus, X } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { OrganizationItem, WeddingEvent } from '@/types/invitation';
 
@@ -16,8 +16,8 @@ export interface EditableUser {
 }
 
 interface UserEditModalProps {
-  mode: 'admin' | 'self';
-  user: EditableUser;
+  mode: 'create' | 'admin' | 'self';
+  user?: EditableUser;
   actorRole?: string;
   organizations?: OrganizationItem[];
   events?: WeddingEvent[];
@@ -42,21 +42,30 @@ export function UserEditModal({
   onClose,
   onSaved,
 }: UserEditModalProps) {
-  const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
+  const [role, setRole] = useState<'SUPERADMIN' | 'ORG_ADMIN' | 'COUPLE'>(
+    (user?.role as 'SUPERADMIN' | 'ORG_ADMIN' | 'COUPLE') || 'COUPLE'
+  );
+  const [name, setName] = useState(user?.name || '');
+  const [email, setEmail] = useState(user?.email || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [organizationId, setOrganizationId] = useState(user.organizationId || '');
-  const [assignedEventId, setAssignedEventId] = useState(user.assignedEventId || '');
+  const [organizationId, setOrganizationId] = useState(user?.organizationId || '');
+  const [assignedEventId, setAssignedEventId] = useState(user?.assignedEventId || '');
   const [saving, setSaving] = useState(false);
 
   const isSuperAdmin = actorRole === 'SUPERADMIN';
-  const showOrgSelect = mode === 'admin' && isSuperAdmin && user.role !== 'SUPERADMIN';
-  const showEventSelect = mode === 'admin' && user.role === 'COUPLE';
+  const effectiveRole = mode === 'create' ? role : user?.role || 'COUPLE';
+  const showOrgSelect =
+    (mode === 'create' || mode === 'admin') && isSuperAdmin && effectiveRole !== 'SUPERADMIN';
+  const showEventSelect = (mode === 'create' || mode === 'admin') && effectiveRole === 'COUPLE';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newPassword && newPassword.trim().length < 6) {
+    if (mode === 'create' && newPassword.trim().length < 6) {
+      toast.error('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    if (mode !== 'create' && newPassword && newPassword.trim().length < 6) {
       toast.error('La nueva contraseña debe tener al menos 6 caracteres');
       return;
     }
@@ -64,10 +73,39 @@ export function UserEditModal({
       toast.error('Ingresa tu contraseña actual para cambiar la clave');
       return;
     }
+    if (mode === 'create' && effectiveRole === 'ORG_ADMIN' && !organizationId) {
+      toast.error('Selecciona la empresa o paquete para este administrador');
+      return;
+    }
 
     setSaving(true);
     try {
-      if (mode === 'self') {
+      if (mode === 'create') {
+        const res = await apiFetch<{
+          user: {
+            id: string;
+            name: string;
+            email: string;
+            role: string;
+            organizationId: string | null;
+            organizationName?: string | null;
+            assignedEventId: string | null;
+          };
+        }>('/api/users', {
+          method: 'POST',
+          auth: true,
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            password: newPassword.trim(),
+            role: effectiveRole,
+            ...(showOrgSelect ? { organizationId: organizationId || null } : {}),
+            ...(showEventSelect ? { assignedEventId: assignedEventId || null } : {}),
+          }),
+        });
+        toast.success('Usuario creado correctamente');
+        onSaved(res.user);
+      } else if (mode === 'self') {
         const res = await apiFetch<{
           token?: string;
           user: {
@@ -95,7 +133,7 @@ export function UserEditModal({
         }
         toast.success('Tus datos han sido actualizados');
         onSaved(res.user);
-      } else {
+      } else if (user) {
         const res = await apiFetch<{
           user: {
             id: string;
@@ -129,13 +167,21 @@ export function UserEditModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-[1px]">
       <div className="bg-white rounded-2xl border border-stone-200 shadow-xl w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
           <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-amber-700" />
+            {mode === 'create' ? (
+              <UserPlus className="h-4 w-4 text-amber-700" />
+            ) : (
+              <KeyRound className="h-4 w-4 text-amber-700" />
+            )}
             <h3 className="font-semibold text-sm text-stone-900">
-              {mode === 'self' ? 'Mi Perfil y Seguridad' : `Editar Usuario (${user.role})`}
+              {mode === 'create'
+                ? 'Crear Nuevo Usuario'
+                : mode === 'self'
+                  ? 'Mi Perfil y Seguridad'
+                  : `Editar Usuario (${user?.role})`}
             </h3>
           </div>
           <button
@@ -148,6 +194,21 @@ export function UserEditModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          {mode === 'create' && isSuperAdmin && (
+            <label className="block space-y-1">
+              <span className="text-xs font-medium text-stone-700">Tipo de Usuario (Rol)</span>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as 'SUPERADMIN' | 'ORG_ADMIN' | 'COUPLE')}
+                className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
+              >
+                <option value="COUPLE">Pareja / Novios (COUPLE)</option>
+                <option value="ORG_ADMIN">Wedding Planner / Admin Empresa (ORG_ADMIN)</option>
+                <option value="SUPERADMIN">Administrador Principal (SUPERADMIN)</option>
+              </select>
+            </label>
+          )}
+
           <label className="block space-y-1">
             <span className="text-xs font-medium text-stone-700">Nombre</span>
             <input
@@ -156,6 +217,7 @@ export function UserEditModal({
               minLength={2}
               value={name}
               onChange={(e) => setName(e.target.value)}
+              placeholder="Ej. María & Carlos o Agencia Bodas"
               className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
             />
           </label>
@@ -167,16 +229,20 @@ export function UserEditModal({
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="correo@ejemplo.com"
               className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
             />
           </label>
 
           {showOrgSelect && (
             <label className="block space-y-1">
-              <span className="text-xs font-medium text-stone-700">Empresa / Paquete</span>
+              <span className="text-xs font-medium text-stone-700">
+                Empresa / Paquete {effectiveRole === 'ORG_ADMIN' ? '*' : '(Opcional)'}
+              </span>
               <select
                 value={organizationId}
                 onChange={(e) => setOrganizationId(e.target.value)}
+                required={effectiveRole === 'ORG_ADMIN'}
                 className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
               >
                 <option value="">Sin empresa asignada</option>
@@ -204,6 +270,9 @@ export function UserEditModal({
                   </option>
                 ))}
               </select>
+              <span className="block text-[11px] text-stone-400">
+                Las bodas se crean desde el botón &ldquo;+ Nueva Boda&rdquo; en la cabecera superior.
+              </span>
             </label>
           )}
 
@@ -225,10 +294,13 @@ export function UserEditModal({
 
             <label className="block space-y-1">
               <span className="text-xs font-medium text-stone-700">
-                Nueva contraseña (opcional — dejar vacío para mantener la actual)
+                {mode === 'create'
+                  ? 'Contraseña (mínimo 6 caracteres) *'
+                  : 'Nueva contraseña (opcional — dejar vacío para mantener la actual)'}
               </span>
               <input
                 type="password"
+                required={mode === 'create'}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Mínimo 6 caracteres"
@@ -250,7 +322,7 @@ export function UserEditModal({
               disabled={saving}
               className="rounded-xl bg-stone-900 text-white px-4 py-2 text-xs font-semibold hover:bg-stone-800 disabled:opacity-60"
             >
-              {saving ? 'Guardando...' : 'Guardar Cambios'}
+              {saving ? 'Guardando...' : mode === 'create' ? 'Crear Usuario' : 'Guardar Cambios'}
             </button>
           </div>
         </form>

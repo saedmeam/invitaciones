@@ -297,6 +297,98 @@ export class AuthUseCases {
     };
   }
 
+  async createUser(
+    actor: AuthActor,
+    dto: {
+      name: string;
+      email: string;
+      password: string;
+      role: 'SUPERADMIN' | 'ORG_ADMIN' | 'COUPLE';
+      organizationId?: string | null;
+      assignedEventId?: string | null;
+    }
+  ) {
+    ensureCanManageEventsOrCouples(actor);
+
+    if (actor.role === 'ORG_ADMIN' && dto.role !== 'COUPLE') {
+      throw new AppError(
+        'Solo puedes crear cuentas de pareja (COUPLE) para tu empresa',
+        403,
+        'FORBIDDEN'
+      );
+    }
+
+    const cleanEmail = dto.email.trim().toLowerCase();
+    const existing = await this.adminRepo.findByEmail(cleanEmail);
+    if (existing) {
+      throw new AppError('Ya existe un usuario registrado con ese correo', 409, 'EMAIL_CONFLICT');
+    }
+
+    let orgId: string | null =
+      actor.role === 'ORG_ADMIN' ? actor.organizationId || null : dto.organizationId || null;
+
+    if (dto.role === 'ORG_ADMIN' && !orgId) {
+      throw new AppError(
+        'Debes seleccionar una empresa o paquete para el administrador (ORG_ADMIN)',
+        400,
+        'ORGANIZATION_REQUIRED'
+      );
+    }
+
+    if (orgId) {
+      const org = await this.orgRepo.findById(orgId);
+      if (!org) {
+        throw new AppError('Empresa no encontrada', 404, 'NOT_FOUND');
+      }
+      orgId = org.id;
+    }
+
+    let eventId: string | null = null;
+    if (dto.role === 'COUPLE' && dto.assignedEventId) {
+      const event = await this.eventRepo.findById(dto.assignedEventId);
+      if (!event) {
+        throw new AppError('Boda asignada no encontrada', 404, 'NOT_FOUND');
+      }
+      if (actor.role === 'ORG_ADMIN' && event.organizationId !== actor.organizationId) {
+        throw new AppError(
+          'No puedes asignar una boda que pertenece a otra empresa',
+          403,
+          'FORBIDDEN'
+        );
+      }
+      eventId = event.id;
+      if (!orgId && event.organizationId) {
+        orgId = event.organizationId;
+      }
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password.trim(), 10);
+    const created = await this.adminRepo.createUser({
+      name: dto.name.trim(),
+      email: cleanEmail,
+      passwordHash,
+      role: dto.role,
+      organizationId: dto.role === 'SUPERADMIN' ? orgId : orgId,
+      assignedEventId: eventId,
+      createdById: actor.userId,
+    });
+
+    return {
+      id: created.id,
+      email: created.email,
+      name: created.name,
+      role: created.role,
+      organizationId: created.organizationId,
+      organizationName: created.organizationName || null,
+      organizationType: created.organizationType || null,
+      organizationMaxEvents: created.organizationMaxEvents ?? null,
+      assignedEventId: created.assignedEventId,
+      assignedEventSlug: created.assignedEventSlug || null,
+      assignedEventTitle: created.assignedEventTitle || null,
+      createdById: created.createdById,
+    };
+  }
+
   async updateUser(
     targetUserId: string,
     actor: AuthActor,

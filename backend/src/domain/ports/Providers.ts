@@ -43,9 +43,13 @@ export interface DriveUploadResult {
 }
 
 export interface IDriveStorageProvider {
-  isConfigured(): boolean;
-  getAuthUrl(): string | null;
-  exchangeCodeForTokens(code: string): Promise<{ refreshToken: string | null }>;
+  hasOAuthApp(): boolean;
+  isConfigured(eventRefreshToken?: string | null): boolean;
+  getAuthUrl(state?: string): string | null;
+  exchangeCodeForTokens(
+    code: string,
+    persistToGlobalEnv?: boolean
+  ): Promise<{ refreshToken: string | null; email: string | null }>;
   uploadFile(params: {
     filePath: string;
     fileName: string;
@@ -55,16 +59,19 @@ export interface IDriveStorageProvider {
     folderId?: string | null;
     photosAlbumId?: string | null;
     albumTitle?: string;
+    refreshToken?: string | null;
   }): Promise<DriveUploadResult>;
   getFileStream(params: {
     storageMode: StorageMode;
     driveFileId: string | null;
     photosMediaItemId: string | null;
     localFallbackPath: string | null;
+    refreshToken?: string | null;
   }): Promise<Readable>;
   deleteFile(params: {
     storageMode: StorageMode;
     driveFileId: string | null;
     localFallbackPath: string | null;
+    refreshToken?: string | null;
   }): Promise<void>;
 }

@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import { Building2, Pencil, Plus, Power, Search, Trash2, UserPlus, Users } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 import { OrganizationItem, OrganizationType, WeddingEvent } from '@/types/invitation';
+import { ConfirmModal } from './ConfirmModal';
 import { EditableUser, UserEditModal } from './UserEditModal';
 
 export interface GlobalUserItem {
@@ -56,6 +57,10 @@ export function AdminOrganizationsTab({
     Record<string, { name: string; email: string; password: string }>
   >({});
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const [deletingUser, setDeletingUser] = useState<GlobalUserItem | null>(null);
+  const [deletingOrg, setDeletingOrg] = useState<OrganizationItem | null>(null);
+  const [deletingLoading, setDeletingLoading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [orgFilter, setOrgFilter] = useState('ALL');
@@ -172,6 +177,22 @@ export function AdminOrganizationsTab({
 
   return (
     <div className="space-y-6">
+      {/* Guía rápida del flujo Multi-Tenant */}
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 px-5 py-3.5 text-xs text-amber-950 flex flex-wrap items-center gap-x-6 gap-y-1.5">
+        <span>
+          <strong>1. Empresa / Paquete:</strong> Crea aquí el Wedding Planner o Cliente Directo y su
+          cupo máximo de bodas.
+        </span>
+        <span>
+          <strong>2. Boda Asignada:</strong> Crea cada boda desde el botón{' '}
+          <strong>&ldquo;+ Nueva Boda&rdquo;</strong> en la cabecera superior.
+        </span>
+        <span>
+          <strong>3. Usuarios:</strong> Crea o edita cuentas <code>ORG_ADMIN</code> (Planners) y{' '}
+          <code>COUPLE</code> (Parejas) desde el botón <strong>&ldquo;+ Crear Usuario&rdquo;</strong>.
+        </span>
+      </div>
+
       {/* Crear Nueva Empresa / Wedding Planner */}
       <form
         onSubmit={handleCreateOrg}
@@ -180,72 +201,103 @@ export function AdminOrganizationsTab({
         <div className="flex items-center gap-2">
           <Building2 className="h-5 w-5 text-amber-700" />
           <h3 className="font-semibold text-sm text-stone-900">
-            Nueva Empresa / Wedding Planner (Multi-Tenant)
+            Nueva Empresa / Paquete (Wedding Planner o Cliente Directo)
           </h3>
         </div>
 
         <div className="grid sm:grid-cols-5 gap-3">
-          <input
-            type="text"
-            placeholder="Nombre Empresa / Planner"
-            value={form.name}
-            onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-            required
-            className="sm:col-span-2 rounded-xl border border-stone-300 px-3 py-2 text-xs"
-          />
-          <input
-            type="text"
-            placeholder="Slug (ej. bodas-elite)"
-            value={form.slug}
-            onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value }))}
-            required
-            className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-          />
-          <select
-            value={form.type}
-            onChange={(e) => setForm((p) => ({ ...p, type: e.target.value as OrganizationType }))}
-            className="rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
-          >
-            <option value="PLANNER">Wedding Planner / Empresa</option>
-            <option value="DIRECT">Cliente Directo</option>
-          </select>
-          <input
-            type="number"
-            min={1}
-            max={10000}
-            value={form.maxEvents}
-            onChange={(e) => setForm((p) => ({ ...p, maxEvents: Number(e.target.value) }))}
-            placeholder="Cupo bodas"
-            className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-          />
+          <label className="sm:col-span-2 space-y-1">
+            <span className="block text-[11px] font-medium text-stone-600">
+              Nombre de la Empresa / Planner
+            </span>
+            <input
+              type="text"
+              placeholder="Ej. Bodas Élite"
+              value={form.name}
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              required
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11px] font-medium text-stone-600">Slug identificador</span>
+            <input
+              type="text"
+              placeholder="ej. bodas-elite"
+              value={form.slug}
+              onChange={(e) => setForm((p) => ({ ...p, slug: e.target.value }))}
+              required
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11px] font-medium text-stone-600">Tipo de Paquete</span>
+            <select
+              value={form.type}
+              onChange={(e) => setForm((p) => ({ ...p, type: e.target.value as OrganizationType }))}
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
+            >
+              <option value="PLANNER">Wedding Planner / Empresa</option>
+              <option value="DIRECT">Cliente Directo</option>
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11px] font-medium text-stone-600">
+              Cupo máximo de bodas
+            </span>
+            <input
+              type="number"
+              min={1}
+              max={10000}
+              value={form.maxEvents}
+              onChange={(e) => setForm((p) => ({ ...p, maxEvents: Number(e.target.value) }))}
+              placeholder="10"
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
         </div>
 
-        <div className="grid sm:grid-cols-4 gap-3 pt-2 border-t border-stone-100">
-          <input
-            type="text"
-            placeholder="Nombre Admin Empresa (Opcional)"
-            value={form.adminName}
-            onChange={(e) => setForm((p) => ({ ...p, adminName: e.target.value }))}
-            className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-          />
-          <input
-            type="email"
-            placeholder="Correo acceso (ORG_ADMIN)"
-            value={form.adminEmail}
-            onChange={(e) => setForm((p) => ({ ...p, adminEmail: e.target.value }))}
-            className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-          />
-          <input
-            type="password"
-            placeholder="Contraseña (mín. 6)"
-            value={form.adminPassword}
-            onChange={(e) => setForm((p) => ({ ...p, adminPassword: e.target.value }))}
-            className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-          />
+        <div className="grid sm:grid-cols-4 gap-3 pt-2 border-t border-stone-100 items-end">
+          <label className="space-y-1">
+            <span className="block text-[11px] font-medium text-stone-600">
+              Nombre Admin Inicial (Opcional)
+            </span>
+            <input
+              type="text"
+              placeholder="Nombre del planner"
+              value={form.adminName}
+              onChange={(e) => setForm((p) => ({ ...p, adminName: e.target.value }))}
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11px] font-medium text-stone-600">
+              Correo acceso (ORG_ADMIN)
+            </span>
+            <input
+              type="email"
+              placeholder="planner@empresa.com"
+              value={form.adminEmail}
+              onChange={(e) => setForm((p) => ({ ...p, adminEmail: e.target.value }))}
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11px] font-medium text-stone-600">
+              Contraseña (mín. 6)
+            </span>
+            <input
+              type="password"
+              placeholder="••••••"
+              value={form.adminPassword}
+              onChange={(e) => setForm((p) => ({ ...p, adminPassword: e.target.value }))}
+              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+            />
+          </label>
           <button
             type="submit"
             disabled={creating}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 text-white px-4 py-2 text-xs font-semibold hover:bg-stone-800 disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-stone-900 text-white px-4 py-2 text-xs font-semibold hover:bg-stone-800 disabled:opacity-60 h-[34px]"
           >
             <Plus className="h-3.5 w-3.5" />
             {creating ? 'Creando...' : 'Crear Empresa'}
@@ -286,20 +338,23 @@ export function AdminOrganizationsTab({
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <input
-                    type="number"
-                    min={1}
-                    max={10000}
-                    defaultValue={org.maxEvents}
-                    onBlur={(e) => {
-                      const val = Number(e.target.value);
-                      if (val && val !== org.maxEvents) {
-                        handleUpdateQuota(org, val);
-                      }
-                    }}
-                    title="Cupo máximo de bodas"
-                    className="w-16 rounded-lg border border-stone-300 px-2 py-1 text-xs text-center"
-                  />
+                  <label className="flex items-center gap-1 text-[11px] text-stone-500">
+                    <span>Cupo:</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={10000}
+                      defaultValue={org.maxEvents}
+                      onBlur={(e) => {
+                        const val = Number(e.target.value);
+                        if (val && val !== org.maxEvents) {
+                          handleUpdateQuota(org, val);
+                        }
+                      }}
+                      title="Cupo máximo de bodas"
+                      className="w-16 rounded-lg border border-stone-300 px-2 py-1 text-xs text-center text-stone-900"
+                    />
+                  </label>
                   {org.slug !== 'plataforma-directa' && (
                     <>
                       <button
@@ -313,14 +368,7 @@ export function AdminOrganizationsTab({
                       <button
                         type="button"
                         title="Eliminar empresa"
-                        onClick={async () => {
-                          await apiFetch(`/api/organizations/${org.id}`, {
-                            method: 'DELETE',
-                            auth: true,
-                          });
-                          toast.success('Empresa eliminada');
-                          onRefresh();
-                        }}
+                        onClick={() => setDeletingOrg(org)}
                         className="p-1.5 rounded-lg border border-rose-200 text-rose-600 hover:bg-rose-50"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -442,6 +490,14 @@ export function AdminOrganizationsTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCreatingUser(true)}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 text-white px-3 py-1.5 text-xs font-semibold hover:bg-stone-800"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              Crear Usuario
+            </button>
             <div className="relative">
               <Search className="h-3.5 w-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -578,27 +634,7 @@ export function AdminOrganizationsTab({
                         <button
                           type="button"
                           title="Eliminar usuario"
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                `¿Eliminar al usuario "${u.name}" (${u.email})? Esta acción no se puede deshacer.`
-                              )
-                            ) {
-                              return;
-                            }
-                            try {
-                              await apiFetch(`/api/users/${u.id}`, {
-                                method: 'DELETE',
-                                auth: true,
-                              });
-                              toast.success('Usuario eliminado');
-                              onRefresh();
-                            } catch (err) {
-                              toast.error(
-                                err instanceof Error ? err.message : 'Error eliminando usuario'
-                              );
-                            }
-                          }}
+                          onClick={() => setDeletingUser(u)}
                           className="inline-flex items-center justify-center rounded-lg border border-rose-200 p-1.5 text-rose-600 hover:bg-rose-50"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -620,6 +656,17 @@ export function AdminOrganizationsTab({
         </div>
       </div>
 
+      {creatingUser && (
+        <UserEditModal
+          mode="create"
+          actorRole="SUPERADMIN"
+          organizations={organizations}
+          events={events}
+          onClose={() => setCreatingUser(false)}
+          onSaved={() => onRefresh()}
+        />
+      )}
+
       {editingUser && (
         <UserEditModal
           mode="admin"
@@ -629,6 +676,58 @@ export function AdminOrganizationsTab({
           events={events}
           onClose={() => setEditingUser(null)}
           onSaved={() => onRefresh()}
+        />
+      )}
+
+      {deletingOrg && (
+        <ConfirmModal
+          title="Eliminar empresa / paquete"
+          message={`¿Estás seguro de eliminar "${deletingOrg.name}"? Se eliminarán sus bodas asociadas y sus usuarios quedarán sin empresa asignada.`}
+          confirmLabel="Eliminar empresa"
+          loading={deletingLoading}
+          onCancel={() => setDeletingOrg(null)}
+          onConfirm={async () => {
+            setDeletingLoading(true);
+            try {
+              await apiFetch(`/api/organizations/${deletingOrg.id}`, {
+                method: 'DELETE',
+                auth: true,
+              });
+              toast.success('Empresa eliminada');
+              setDeletingOrg(null);
+              onRefresh();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Error eliminando empresa');
+            } finally {
+              setDeletingLoading(false);
+            }
+          }}
+        />
+      )}
+
+      {deletingUser && (
+        <ConfirmModal
+          title="Eliminar usuario"
+          message={`¿Estás seguro de eliminar al usuario "${deletingUser.name}" (${deletingUser.email})? Esta acción no se puede deshacer.`}
+          confirmLabel="Eliminar usuario"
+          loading={deletingLoading}
+          onCancel={() => setDeletingUser(null)}
+          onConfirm={async () => {
+            setDeletingLoading(true);
+            try {
+              await apiFetch(`/api/users/${deletingUser.id}`, {
+                method: 'DELETE',
+                auth: true,
+              });
+              toast.success('Usuario eliminado');
+              setDeletingUser(null);
+              onRefresh();
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'Error eliminando usuario');
+            } finally {
+              setDeletingLoading(false);
+            }
+          }}
         />
       )}
     </div>

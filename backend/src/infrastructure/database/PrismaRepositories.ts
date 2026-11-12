@@ -71,6 +71,8 @@ function mapEvent(row: any): EventEntity {
     driveFolderId: row.driveFolderId,
     photosAlbumId: row.photosAlbumId ?? null,
     mediaProvider: (row.mediaProvider || 'HYBRID') as MediaProviderType,
+    googleAccountEmail: row.googleAccountEmail ?? null,
+    googleRefreshToken: row.googleRefreshToken ?? null,
     photoPin: row.photoPin,
     isPrimary: Boolean(row.isPrimary),
     isActive: row.isActive,
@@ -390,6 +392,30 @@ export class PrismaAdminUserRepository implements IAdminUserRepository {
         ...(data.passwordHash !== undefined ? { passwordHash: data.passwordHash } : {}),
         ...(data.organizationId !== undefined ? { organizationId: data.organizationId } : {}),
         ...(data.assignedEventId !== undefined ? { assignedEventId: data.assignedEventId } : {}),
+      },
+      include: this.userInclude,
+    });
+    return this.mapUser(row);
+  }
+
+  async createUser(data: {
+    email: string;
+    name: string;
+    passwordHash: string;
+    role: string;
+    organizationId: string | null;
+    assignedEventId: string | null;
+    createdById: string;
+  }): Promise<AdminUserEntity> {
+    const row = await this.db.adminUser.create({
+      data: {
+        email: data.email,
+        name: data.name,
+        passwordHash: data.passwordHash,
+        role: data.role,
+        organizationId: data.organizationId,
+        assignedEventId: data.assignedEventId,
+        createdById: data.createdById,
       },
       include: this.userInclude,
     });

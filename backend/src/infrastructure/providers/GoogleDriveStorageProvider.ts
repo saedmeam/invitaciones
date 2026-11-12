@@ -22,28 +22,37 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     fs.mkdirSync(this.localFallbackDir, { recursive: true });
   }
 
-  private createOAuthClient() {
+  private createOAuthClient(eventRefreshToken?: string | null) {
     if (!this.clientId || !this.clientSecret) {
       return null;
     }
     const auth = new google.auth.OAuth2(this.clientId, this.clientSecret, this.redirectUri);
-    if (this.runtimeRefreshToken) {
-      auth.setCredentials({ refresh_token: this.runtimeRefreshToken });
+    const token = eventRefreshToken || this.runtimeRefreshToken;
+    if (token) {
+      auth.setCredentials({ refresh_token: token });
     }
     return auth;
   }
 
-  isConfigured(): boolean {
-    return Boolean(this.clientId && this.clientSecret && this.runtimeRefreshToken);
+  hasOAuthApp(): boolean {
+    return Boolean(this.clientId && this.clientSecret);
   }
 
-  getAuthUrl(): string | null {
+  isConfigured(eventRefreshToken?: string | null): boolean {
+    return Boolean(
+      this.clientId && this.clientSecret && (eventRefreshToken || this.runtimeRefreshToken)
+    );
+  }
+
+  getAuthUrl(state?: string): string | null {
     if (!this.clientId || !this.clientSecret) return null;
     const auth = new google.auth.OAuth2(this.clientId, this.clientSecret, this.redirectUri);
     return auth.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
+      ...(state ? { state } : {}),
       scope: [
+        'https://www.googleapis.com/auth/userinfo.email',
         'https://www.googleapis.com/auth/photoslibrary.appendonly',
         'https://www.googleapis.com/auth/photoslibrary.readonly.appcreateddata',
         'https://www.googleapis.com/auth/drive.file',
@@ -51,17 +60,31 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     });
   }
 
-  async exchangeCodeForTokens(code: string): Promise<{ refreshToken: string | null }> {
+  async exchangeCodeForTokens(
+    code: string,
+    persistToGlobalEnv = false
+  ): Promise<{ refreshToken: string | null; email: string | null }> {
     if (!this.clientId || !this.clientSecret) {
-      return { refreshToken: null };
+      return { refreshToken: null, email: null };
     }
     const auth = new google.auth.OAuth2(this.clientId, this.clientSecret, this.redirectUri);
     const { tokens } = await auth.getToken(code);
-    if (tokens.refresh_token) {
+    auth.setCredentials(tokens);
+
+    let email: string | null = null;
+    try {
+      const oauth2 = google.oauth2({ version: 'v2', auth });
+      const profile = await oauth2.userinfo.get();
+      email = profile.data.email || null;
+    } catch {
+      // Si no se pudo leer el correo, se continúa con el refresh_token
+    }
+
+    if (tokens.refresh_token && persistToGlobalEnv) {
       this.runtimeRefreshToken = tokens.refresh_token;
       await this.persistRefreshTokenToEnv(tokens.refresh_token);
     }
-    return { refreshToken: tokens.refresh_token || null };
+    return { refreshToken: tokens.refresh_token || null, email };
   }
 
   private async persistRefreshTokenToEnv(refreshToken: string) {
@@ -83,8 +106,8 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     }
   }
 
-  private async getAccessToken(): Promise<string> {
-    const auth = this.createOAuthClient();
+  private async getAccessToken(eventRefreshToken?: string | null): Promise<string> {
+    const auth = this.createOAuthClient(eventRefreshToken);
     if (!auth) throw new Error('OAuth2 de Google no configurado');
     const { token } = await auth.getAccessToken();
     if (!token) throw new Error('No se pudo obtener Access Token de Google');
@@ -118,8 +141,9 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     caption?: string;
     photosAlbumId?: string | null;
     albumTitle?: string;
+    refreshToken?: string | null;
   }): Promise<DriveUploadResult> {
-    const accessToken = await this.getAccessToken();
+    const accessToken = await this.getAccessToken(params.refreshToken);
     const albumId = await this.ensurePhotosAlbum(
       accessToken,
       params.photosAlbumId,
@@ -192,8 +216,9 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     fileName: string;
     mimeType: string;
     folderId?: string | null;
+    refreshToken?: string | null;
   }): Promise<DriveUploadResult> {
-    const auth = this.createOAuthClient()!;
+    const auth = this.createOAuthClient(params.refreshToken)!;
     const drive = google.drive({ version: 'v3', auth });
     const targetFolder = params.folderId?.trim() || this.defaultFolderId.trim();
 
@@ -228,11 +253,12 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     folderId?: string | null;
     photosAlbumId?: string | null;
     albumTitle?: string;
+    refreshToken?: string | null;
   }): Promise<DriveUploadResult> {
     const isPhotoOrVideo =
       params.mimeType.startsWith('image/') || params.mimeType.startsWith('video/');
 
-    if (this.isConfigured()) {
+    if (this.isConfigured(params.refreshToken)) {
       const usePhotos =
         params.mediaProvider === 'GOOGLE_PHOTOS' ||
         (params.mediaProvider === 'HYBRID' && isPhotoOrVideo);
@@ -262,9 +288,14 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     driveFileId: string | null;
     photosMediaItemId: string | null;
     localFallbackPath: string | null;
+    refreshToken?: string | null;
   }): Promise<Readable> {
-    if (params.storageMode === 'GOOGLE_PHOTOS' && params.photosMediaItemId && this.isConfigured()) {
-      const accessToken = await this.getAccessToken();
+    if (
+      params.storageMode === 'GOOGLE_PHOTOS' &&
+      params.photosMediaItemId &&
+      this.isConfigured(params.refreshToken)
+    ) {
+      const accessToken = await this.getAccessToken(params.refreshToken);
       const itemRes = await fetch(
         `https://photoslibrary.googleapis.com/v1/mediaItems/${params.photosMediaItemId}`,
         {
@@ -283,8 +314,12 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
       return Readable.fromWeb(mediaRes.body as any);
     }
 
-    if (params.storageMode === 'GOOGLE_DRIVE' && params.driveFileId && this.isConfigured()) {
-      const auth = this.createOAuthClient()!;
+    if (
+      params.storageMode === 'GOOGLE_DRIVE' &&
+      params.driveFileId &&
+      this.isConfigured(params.refreshToken)
+    ) {
+      const auth = this.createOAuthClient(params.refreshToken)!;
       const drive = google.drive({ version: 'v3', auth });
       const res = await drive.files.get(
         { fileId: params.driveFileId, alt: 'media' },
@@ -304,9 +339,14 @@ export class GoogleDriveStorageProvider implements IDriveStorageProvider {
     storageMode: StorageMode;
     driveFileId: string | null;
     localFallbackPath: string | null;
+    refreshToken?: string | null;
   }): Promise<void> {
-    if (params.storageMode === 'GOOGLE_DRIVE' && params.driveFileId && this.isConfigured()) {
-      const auth = this.createOAuthClient()!;
+    if (
+      params.storageMode === 'GOOGLE_DRIVE' &&
+      params.driveFileId &&
+      this.isConfigured(params.refreshToken)
+    ) {
+      const auth = this.createOAuthClient(params.refreshToken)!;
       const drive = google.drive({ version: 'v3', auth });
       await drive.files.delete({ fileId: params.driveFileId }).catch(() => {});
       return;

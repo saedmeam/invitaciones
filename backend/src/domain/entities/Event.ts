@@ -96,6 +96,8 @@ export interface EventEntity {
   driveFolderId: string | null;
   photosAlbumId: string | null;
   mediaProvider: MediaProviderType;
+  googleAccountEmail?: string | null;
+  googleRefreshToken?: string | null;
   photoPin: string | null;
   isPrimary: boolean;
   isActive: boolean;

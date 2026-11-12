@@ -76,6 +76,9 @@ export default function AdminDashboardPage() {
     uploadUrl: string;
     qrDataUrl: string;
     driveConfigured: boolean;
+    googleOAuthAppConfigured?: boolean;
+    googleAccountEmail?: string | null;
+    googlePerEventConnected?: boolean;
   } | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
@@ -350,18 +353,45 @@ export default function AdminDashboardPage() {
   };
 
   const handleGoogleDriveConnect = async () => {
+    if (!selectedEvent) return;
     try {
-      const res = await apiFetch<{ url: string | null; configured: boolean }>(
-        '/api/media/google/auth-url',
+      const res = await apiFetch<{ url: string | null; hasOAuthApp: boolean }>(
+        `/api/events/${selectedEvent.id}/google/auth-url`,
         { auth: true }
       );
       if (!res.url) {
         toast.error('Configura GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en backend/.env');
         return;
       }
-      window.open(res.url, '_blank');
+      window.open(res.url, 'google_oauth', 'width=540,height=680');
+      const onMessage = (ev: MessageEvent) => {
+        if (ev.data?.type === 'GOOGLE_OAUTH_DONE') {
+          window.removeEventListener('message', onMessage);
+          toast.success(
+            ev.data.email
+              ? `Cuenta Google vinculada a esta boda: ${ev.data.email}`
+              : 'Cuenta Google vinculada a esta boda'
+          );
+          loadEventDetails(selectedEvent.id, currentUser?.role);
+        }
+      };
+      window.addEventListener('message', onMessage);
     } catch {
       toast.error('No se pudo obtener la URL de Google OAuth');
+    }
+  };
+
+  const handleGoogleDriveDisconnect = async () => {
+    if (!selectedEvent) return;
+    try {
+      await apiFetch(`/api/events/${selectedEvent.id}/google/disconnect`, {
+        method: 'POST',
+        auth: true,
+      });
+      toast.success('Cuenta Google desvinculada de esta boda');
+      loadEventDetails(selectedEvent.id, currentUser?.role);
+    } catch {
+      toast.error('No se pudo desvincular la cuenta Google');
     }
   };
 
@@ -481,7 +511,7 @@ export default function AdminDashboardPage() {
                   className="inline-flex items-center gap-1 rounded-xl border border-stone-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-50"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  Nuevo Evento
+                  Nueva Boda
                 </button>
                 {selectedEvent && (
                   <button
@@ -490,7 +520,7 @@ export default function AdminDashboardPage() {
                     className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
                   >
                     <KeyRound className="h-3.5 w-3.5" />
-                    Acceso Pareja ({coupleUsers.length})
+                    Usuarios Pareja ({coupleUsers.length})
                   </button>
                 )}
               </>
@@ -681,7 +711,13 @@ export default function AdminDashboardPage() {
         <div className="max-w-7xl mx-auto flex overflow-x-auto gap-6 text-sm font-medium">
           {[
             ...(isSuperAdmin
-              ? [{ id: 'ORGANIZATIONS', label: 'Empresas & Planners', icon: Building2 }]
+              ? [
+                  {
+                    id: 'ORGANIZATIONS',
+                    label: 'Empresas, Paquetes & Usuarios',
+                    icon: Building2,
+                  },
+                ]
               : []),
             { id: 'STATS', label: 'Estadísticas & Detalle', icon: BarChart3 },
             { id: 'GUESTS', label: 'Invitados & RSVP', icon: Users },
@@ -1088,17 +1124,35 @@ export default function AdminDashboardPage() {
                           type="button"
                           onClick={handleGoogleDriveConnect}
                           className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold border ${
-                            qrInfo.driveConfigured
+                            qrInfo.googlePerEventConnected
                               ? 'border-emerald-300 bg-emerald-50 text-emerald-800'
-                              : 'border-amber-300 bg-amber-50 text-amber-800'
+                              : qrInfo.driveConfigured
+                                ? 'border-emerald-200 bg-emerald-50/70 text-emerald-800'
+                                : 'border-amber-300 bg-amber-50 text-amber-800'
                           }`}
                         >
                           <Check className="h-3.5 w-3.5" />
-                          {qrInfo.driveConfigured
-                            ? 'Cuenta Google Conectada (Photos + Drive)'
-                            : 'Conectar Cuenta Google (Photos / Drive)'}
+                          {qrInfo.googlePerEventConnected
+                            ? `Conectado: ${qrInfo.googleAccountEmail || 'Cuenta de esta boda'} (Cambiar)`
+                            : qrInfo.driveConfigured
+                              ? 'Cuenta Global Activa — Vincular Correo Propio de esta Boda'
+                              : 'Conectar Cuenta Google de esta Boda'}
                         </button>
+                        {qrInfo.googlePerEventConnected && (
+                          <button
+                            type="button"
+                            onClick={handleGoogleDriveDisconnect}
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-700 hover:bg-rose-100"
+                          >
+                            Desvincular
+                          </button>
+                        )}
                       </div>
+                      <p className="text-[11px] text-stone-500 max-w-xl pt-1">
+                        {qrInfo.googleOAuthAppConfigured
+                          ? 'Cada boda puede vincular su propio correo de Gmail / Google Photos / Drive. Si no vinculas uno, las fotos se guardarán en el respaldo local del servidor.'
+                          : 'Para habilitar la sincronización con Gmail / Google Photos / Drive por boda, configura una sola vez GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en backend/.env (Redirect URI: http://localhost:4006/api/media/google/callback). Mientras tanto, las fotos se guardan en respaldo local.'}
+                      </p>
                     </div>
                     <img
                       src={qrInfo.qrDataUrl}

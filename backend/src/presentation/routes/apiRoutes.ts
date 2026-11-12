@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { Router, Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { z } from 'zod';
 import { RsvpDomainService } from '../../domain/services/RsvpDomainService';
@@ -85,6 +86,25 @@ export function createApiRouter(container: AppContainer): Router {
     asyncHandler(async (req, res) => {
       const users = await container.authUseCases.listAllUsers(req.user!);
       res.json({ users });
+    })
+  );
+
+  // Crear usuario (SUPERADMIN cualquier rol; ORG_ADMIN solo COUPLE de su empresa)
+  router.post(
+    '/users',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        name: z.string().min(2).max(120),
+        email: z.string().email(),
+        password: z.string().min(6).max(100),
+        role: z.enum(['SUPERADMIN', 'ORG_ADMIN', 'COUPLE']),
+        organizationId: z.string().nullable().optional(),
+        assignedEventId: z.string().nullable().optional(),
+      });
+      const body = schema.parse(req.body);
+      const user = await container.authUseCases.createUser(req.user!, body);
+      res.status(201).json({ user });
     })
   );
 
@@ -274,13 +294,48 @@ export function createApiRouter(container: AppContainer): Router {
     })
   );
 
-  // Google OAuth2 helper
+  // Google OAuth2 helper (por boda y global)
   router.get(
     '/media/google/auth-url',
     requireAuth,
     asyncHandler(async (_req, res) => {
       const url = container.driveProvider.getAuthUrl();
-      res.json({ url, configured: container.driveProvider.isConfigured() });
+      res.json({
+        url,
+        configured: container.driveProvider.isConfigured(),
+        hasOAuthApp: container.driveProvider.hasOAuthApp(),
+      });
+    })
+  );
+
+  router.get(
+    '/events/:eventId/google/auth-url',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.getByIdForActor(
+        String(req.params.eventId),
+        req.user!
+      );
+      const state = jwt.sign({ eventId: event.id }, container.jwtSecret, { expiresIn: '15m' });
+      const url = container.driveProvider.getAuthUrl(state);
+      res.json({
+        url,
+        hasOAuthApp: container.driveProvider.hasOAuthApp(),
+        googleAccountEmail: event.googleAccountEmail || null,
+        googlePerEventConnected: Boolean(event.googleRefreshToken),
+      });
+    })
+  );
+
+  router.post(
+    '/events/:eventId/google/disconnect',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      await container.mediaAndWishUseCases.disconnectGoogleAccount(
+        String(req.params.eventId),
+        req.user!
+      );
+      res.json({ ok: true });
     })
   );
 
@@ -291,14 +346,51 @@ export function createApiRouter(container: AppContainer): Router {
       if (!code) {
         throw new AppError('Falta código de autorización de Google', 400, 'MISSING_CODE');
       }
-      const { refreshToken } = await container.driveProvider.exchangeCodeForTokens(code);
+
+      let targetEventId: string | null = null;
+      const rawState = req.query.state ? String(req.query.state) : '';
+      if (rawState) {
+        try {
+          const decoded = jwt.verify(rawState, container.jwtSecret) as { eventId?: string };
+          if (decoded.eventId) {
+            targetEventId = decoded.eventId;
+          }
+        } catch {
+          throw new AppError('Estado OAuth inválido o expirado', 400, 'INVALID_OAUTH_STATE');
+        }
+      }
+
+      const { refreshToken, email } = await container.driveProvider.exchangeCodeForTokens(
+        code,
+        !targetEventId
+      );
+
+      if (targetEventId && refreshToken) {
+        await container.mediaAndWishUseCases.saveGoogleConnection(
+          targetEventId,
+          email,
+          refreshToken
+        );
+      }
+
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.send(
-        `<html><body style="font-family:sans-serif;padding:32px;max-width:640px;margin:auto;">
-          <h2>Google Drive conectado</h2>
-          <p>Copia este <strong>GOOGLE_REFRESH_TOKEN</strong> en tu archivo <code>backend/.env</code>:</p>
-          <pre style="background:#f5f5f4;padding:12px;border-radius:8px;overflow:auto;">${refreshToken || 'No se recibió refresh_token (revoca el acceso previo en Google y vuelve a autorizar)'}</pre>
-          <p>Ya puedes cerrar esta ventana.</p>
+        `<html><body style="font-family:sans-serif;padding:32px;max-width:560px;margin:auto;text-align:center;">
+          <h2 style="color:#1c1917;">Cuenta Google conectada${targetEventId ? ' a esta boda' : ''}</h2>
+          ${email ? `<p style="color:#059669;font-weight:600;">Correo vinculado: ${email}</p>` : ''}
+          ${
+            !refreshToken
+              ? '<p style="color:#b91c1c;">Google no devolvió un refresh_token nuevo. Revoca el acceso previo en myaccount.google.com/permissions y vuelve a autorizar.</p>'
+              : targetEventId
+                ? '<p style="color:#57534e;">Las fotos y archivos de esta boda se guardarán automáticamente en esta cuenta. Ya puedes cerrar esta ventana.</p>'
+                : `<p>Copia este <strong>GOOGLE_REFRESH_TOKEN</strong> en <code>backend/.env</code>:</p><pre style="background:#f5f5f4;padding:12px;border-radius:8px;overflow:auto;text-align:left;">${refreshToken}</pre>`
+          }
+          <script>
+            if (window.opener) {
+              window.opener.postMessage({ type: 'GOOGLE_OAUTH_DONE', eventId: ${JSON.stringify(targetEventId)}, email: ${JSON.stringify(email)} }, '*');
+              setTimeout(() => window.close(), 1500);
+            }
+          </script>
         </body></html>`
       );
     })

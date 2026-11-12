@@ -237,7 +237,8 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
     };
 
     const events = await container.eventUseCases.listForActor(superAdminActor);
-    eventId = events[0].id;
+    eventId =
+      events.find((e) => e.slug === 'joselin-y-santiago-2027')?.id || events[0].id;
 
     const loginCouple = await container.authUseCases.login(
       'pareja@invitaciones.local',
@@ -501,7 +502,10 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
     // ORG_ADMIN no puede listar el directorio global de usuarios
     await expect(container.authUseCases.listAllUsers(orgActor)).rejects.toThrow(/administrador/i);
 
-    // Limpieza
+    // Limpieza completa de usuarios y organización de prueba
+    await container.authUseCases.deleteUser(coupleUser.id, superAdminActor).catch(() => {});
+    await container.authUseCases.deleteUser(orgActor2.userId, superAdminActor).catch(() => {});
+    await container.authUseCases.deleteUser(orgActor.userId, superAdminActor).catch(() => {});
     await container.organizationUseCases.remove(org.id, superAdminActor);
   });
 
@@ -645,6 +649,17 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
 
       const loginCheck = await container.authUseCases.login(couple.email, 'perfilpassword123');
       expect(loginCheck.user.name).toBe('Ana y Luis Perfil');
+
+      // 4. SUPERADMIN puede crear usuario directamente via createUser
+      const createdBySuper = await container.authUseCases.createUser(superActor, {
+        name: 'Planner Directo',
+        email: `planner-direct-${suffix}@test.local`,
+        password: 'password123',
+        role: 'ORG_ADMIN',
+        organizationId: org.id,
+      });
+      expect(createdBySuper.organizationId).toBe(org.id);
+      await container.authUseCases.deleteUser(createdBySuper.id, superActor).catch(() => {});
     } finally {
       await container.authUseCases.deleteUser(couple.id, superActor).catch(() => {});
       await container.authUseCases.deleteUser(orgAdmin.id, superActor).catch(() => {});
