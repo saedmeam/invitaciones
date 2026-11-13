@@ -151,6 +151,7 @@ export interface WeddingEvent {
   isActive: boolean;
   organizationId: string | null;
   organizationName?: string | null;
+  organizationType?: OrganizationType | null;
 }
 
 export type OrganizationType = 'DIRECT' | 'PLANNER';

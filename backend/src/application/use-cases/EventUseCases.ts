@@ -116,6 +116,7 @@ export class EventUseCases {
     }
 
     let targetOrgId: string | null = null;
+    let isPlannerOrg = false;
     if (actor.role === 'ORG_ADMIN') {
       if (!actor.organizationId) {
         throw new AppError('Usuario sin empresa asignada', 403, 'FORBIDDEN');
@@ -123,17 +124,28 @@ export class EventUseCases {
       targetOrgId = actor.organizationId;
       const org = await this.orgRepo.findById(targetOrgId);
       OrganizationDomainService.ensureCanCreateEvent(org!);
+      isPlannerOrg = org?.type === 'PLANNER';
     } else {
       targetOrgId = dto.organizationId || actor.organizationId || null;
       if (targetOrgId) {
         const org = await this.orgRepo.findById(targetOrgId);
         OrganizationDomainService.ensureCanCreateEvent(org!);
+        isPlannerOrg = org?.type === 'PLANNER';
       }
     }
 
     const sections: EventSectionsConfig = {
       ...DEFAULT_SECTIONS_CONFIG,
       ...(dto.sectionsConfig || {}),
+    };
+
+    const initialThemeConfig: EventThemeConfig = {
+      ...(dto.themeConfig || {}),
+      planTier: isPlannerOrg
+        ? 'PREMIUM'
+        : actor.role === 'SUPERADMIN' && dto.themeConfig?.planTier === 'CLASSIC'
+          ? 'CLASSIC'
+          : 'PREMIUM',
     };
 
     const rawDrive = dto.driveFolderId || dto.driveFolderUrl;
@@ -156,7 +168,7 @@ export class EventUseCases {
       receptionAddress: dto.receptionAddress,
       receptionMapUrl: dto.receptionMapUrl,
       theme: dto.theme || 'ROMANTIC_EDITORIAL',
-      themeConfig: JSON.stringify(dto.themeConfig || {}),
+      themeConfig: JSON.stringify(initialThemeConfig),
       sectionsConfig: JSON.stringify(sections),
       contentConfig: JSON.stringify(dto.contentConfig || {}),
       driveFolderId: cleanDriveId,
@@ -203,8 +215,23 @@ export class EventUseCases {
       ? { ...current.sectionsConfig, ...dto.sectionsConfig }
       : undefined;
 
+    const isPlannerEvent = current.organizationType === 'PLANNER';
+    const currentPlanTier = isPlannerEvent
+      ? 'PREMIUM'
+      : current.themeConfig?.planTier === 'CLASSIC'
+        ? 'CLASSIC'
+        : 'PREMIUM';
+
     const mergedThemeConfig: EventThemeConfig | undefined = dto.themeConfig
-      ? { ...current.themeConfig, ...dto.themeConfig }
+      ? {
+          ...current.themeConfig,
+          ...dto.themeConfig,
+          planTier: isPlannerEvent
+            ? 'PREMIUM'
+            : actor.role === 'SUPERADMIN' && dto.themeConfig.planTier
+              ? (dto.themeConfig.planTier === 'CLASSIC' ? 'CLASSIC' : 'PREMIUM')
+              : currentPlanTier,
+        }
       : undefined;
 
     const mergedContent: EventContentConfig | undefined = dto.contentConfig

@@ -41,6 +41,7 @@ import {
 
 interface AdminCustomizerTabProps {
   event: WeddingEvent;
+  isSuperAdmin?: boolean;
   onUpdated: (ev: WeddingEvent) => void;
 }
 
@@ -194,11 +195,13 @@ const SECTION_LABELS: Array<{ key: keyof EventSectionsConfig; label: string; des
   { key: 'faq', label: 'Preguntas frecuentes', desc: 'Acordeón de dudas comunes' },
 ];
 
-export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps) {
+export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: AdminCustomizerTabProps) {
   const [showDriveModal, setShowDriveModal] = useState(false);
   const c = event.contentConfig || {};
+  const isPlannerEvent = event.organizationType === 'PLANNER';
+  const canChangePlan = Boolean(isSuperAdmin && !isPlannerEvent);
   const [form, setForm] = useState({
-    planTier: (event.themeConfig.planTier || 'PREMIUM') as EventPlanTier,
+    planTier: (isPlannerEvent ? 'PREMIUM' : event.themeConfig.planTier || 'PREMIUM') as EventPlanTier,
     title: event.title,
     partnerOneName: event.partnerOneName,
     partnerTwoName: event.partnerTwoName,
@@ -286,9 +289,10 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
 
   useEffect(() => {
     const content = event.contentConfig || {};
+    const plannerOwned = event.organizationType === 'PLANNER';
     setForm((prev) => ({
       ...prev,
-      planTier: (event.themeConfig.planTier || 'PREMIUM') as EventPlanTier,
+      planTier: (plannerOwned ? 'PREMIUM' : event.themeConfig.planTier || 'PREMIUM') as EventPlanTier,
       title: event.title,
       partnerOneName: event.partnerOneName,
       partnerTwoName: event.partnerTwoName,
@@ -481,6 +485,13 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
     }
   };
 
+  const effectivePlanTier: EventPlanTier = isPlannerEvent
+    ? 'PREMIUM'
+    : form.planTier === 'CLASSIC'
+    ? 'CLASSIC'
+    : 'PREMIUM';
+  const isClassicPlan = effectivePlanTier === 'CLASSIC';
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -510,7 +521,7 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
         sectionsConfig: form.sectionsConfig,
         themeConfig: {
           ...event.themeConfig,
-          planTier: form.planTier,
+          planTier: effectivePlanTier,
           showDressCodePalette: form.dressCodeShowPalette,
           coverSubtitle: form.coverSubtitle,
           musicUrl: form.musicUrl,
@@ -613,22 +624,23 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
         </div>
       </div>
 
-      {/* Selector de Nivel de Plan de la Boda */}
+      {/* Selector de Nivel de Plan de la Boda (Solo SuperAdmin en bodas directas B2C) */}
+      {canChangePlan && (
       <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-3">
           <div className="flex items-center gap-2">
             <Crown className="h-5 w-5 text-amber-700" />
             <div>
               <h4 className="font-semibold text-sm text-stone-900">
-                Nivel de Plan &amp; Servicios Habilitados de la Boda
+                Nivel de Plan &amp; Servicios Habilitados de la Boda (Exclusivo SuperAdmin - Boda Directa)
               </h4>
               <p className="text-xs text-stone-500">
-                2 planes para parejas (Clásico o Premium). Para Wedding Planners, todas las bodas incluyen Plan Premium completo.
+                Selecciona el paquete contratado por esta pareja (Clásico o Premium). Los Wedding Planners no ven esta opción y tienen siempre Plan Premium completo.
               </p>
             </div>
           </div>
           <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-            Plan Actual: <strong className="uppercase">{form.planTier}</strong>
+            Plan Actual: <strong className="uppercase">{form.planTier === 'CLASSIC' ? 'Clásico' : 'Premium'}</strong>
           </span>
         </div>
 
@@ -668,11 +680,11 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
               </li>
               <li className="flex items-center gap-1.5 text-stone-400">
                 <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
-                <span>Sin sobre 3D animado con lacre y monograma</span>
+                <span>Sin envíos por WhatsApp/Gmail ni pases QR</span>
               </li>
               <li className="flex items-center gap-1.5 text-stone-400">
                 <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
-                <span>Sin música de fondo ni playlist Spotify</span>
+                <span>Sin sobre 3D, música de fondo ni playlist Spotify</span>
               </li>
               <li className="flex items-center gap-1.5 text-stone-400">
                 <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
@@ -732,6 +744,7 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
           </div>
         </div>
       </div>
+      )}
 
       {/* Selector de 12 Paletas y Diseños de Gala */}
       <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
@@ -803,7 +816,9 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
         </div>
       </div>
 
-      {/* Sello de Cera Artesanal 3D & Monograma Parametrizable */}
+      {/* Sello de Cera Artesanal 3D & Monograma Parametrizable (Solo Plan Premium) */}
+      {!isClassicPlan && (
+      <>
       <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -1535,6 +1550,8 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
           </div>
         </div>
       </div>
+      </>
+      )}
 
       {/* Toggles de Secciones */}
       <div className="bg-white rounded-2xl border border-stone-200 p-6">
@@ -1545,7 +1562,11 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
           </h4>
         </div>
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {SECTION_LABELS.map((item) => {
+          {SECTION_LABELS.filter((item) =>
+            isClassicPlan
+              ? !['heroMusic', 'storyGallery', 'spotifyPlaylist', 'wishesWall', 'photoWall'].includes(item.key)
+              : true
+          ).map((item) => {
             const enabled = Boolean(form.sectionsConfig[item.key]);
             return (
               <label
@@ -1583,22 +1604,26 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
             />
             Mostrar este evento en la portada principal (/)
           </label>
-          <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.moderatePhotos}
-              onChange={(e) => setForm((p) => ({ ...p, moderatePhotos: e.target.checked }))}
-            />
-            Moderar fotos/videos antes de mostrarlos en el muro
-          </label>
-          <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.moderateWishes}
-              onChange={(e) => setForm((p) => ({ ...p, moderateWishes: e.target.checked }))}
-            />
-            Moderar buenos deseos antes de publicarlos
-          </label>
+          {!isClassicPlan && (
+            <>
+              <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.moderatePhotos}
+                  onChange={(e) => setForm((p) => ({ ...p, moderatePhotos: e.target.checked }))}
+                />
+                Moderar fotos/videos antes de mostrarlos en el muro
+              </label>
+              <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.moderateWishes}
+                  onChange={(e) => setForm((p) => ({ ...p, moderateWishes: e.target.checked }))}
+                />
+                Moderar buenos deseos antes de publicarlos
+              </label>
+            </>
+          )}
         </div>
       </div>
 
@@ -1809,189 +1834,193 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
           )}
         </div>
 
-        {/* MÚSICA DE FONDO (YOUTUBE / SPOTIFY / MP3) */}
-        <div className="space-y-2">
-          {(() => {
-            const parsedAudio = parseAudioSource(form.musicUrl);
-            return (
-              <>
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-medium text-stone-600">
-                    Música de Fondo (YouTube / Spotify / MP3)
-                  </label>
-                  {parsedAudio.type === 'youtube' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 border border-red-200">
-                      <Video className="h-3 w-3" /> YouTube Video
-                    </span>
-                  )}
-                  {parsedAudio.type === 'spotify' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
-                      <Disc3 className="h-3 w-3" /> Spotify Track
-                    </span>
-                  )}
-                  {parsedAudio.type === 'mp3' && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200">
-                      <Music className="h-3 w-3" /> Archivo MP3
-                    </span>
-                  )}
-                </div>
-                <input
-                  type="url"
-                  value={form.musicUrl}
-                  onChange={(e) => setForm((p) => ({ ...p, musicUrl: e.target.value }))}
-                  placeholder="https://www.youtube.com/watch?v=... o link de Spotify o archivo .mp3"
-                  className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
-                />
-                <p className="text-[11px] text-stone-500">
-                  Esta canción sonará automáticamente al abrir el sobre de gala o con el reproductor de vinilo.
-                </p>
-              </>
-            );
-          })()}
-        </div>
-
-        {/* PLAYLIST DE SPOTIFY DE LA BODA */}
-        <div className="md:col-span-2 space-y-2">
-          {(() => {
-            const spotifyEmbedUrl = getSpotifyPlaylistEmbedUrl(form.spotifyPlaylistUrl);
-            return (
-              <>
-                <div className="flex items-center justify-between">
-                  <label className="block text-xs font-medium text-stone-600">
-                    Playlist de Spotify de la Boda (Opcional)
-                  </label>
-                  {form.spotifyPlaylistUrl && (
-                    <a
-                      href={form.spotifyPlaylistUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline font-medium"
-                    >
-                      <ExternalLink className="h-3 w-3" /> Abrir en Spotify
-                    </a>
-                  )}
-                </div>
-                <input
-                  type="url"
-                  value={form.spotifyPlaylistUrl}
-                  onChange={(e) => setForm((p) => ({ ...p, spotifyPlaylistUrl: e.target.value }))}
-                  placeholder="https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
-                  className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
-                />
-                <p className="text-[11px] text-stone-500">
-                  Pega el enlace de la lista de reproducción de la boda. Se desplegará el reproductor oficial interactivo de Spotify en la invitación para tus invitados.
-                </p>
-
-                {spotifyEmbedUrl && (
-                  <div className="mt-2 rounded-2xl overflow-hidden border border-emerald-200/80 bg-stone-900 shadow-md">
-                    <iframe
-                      src={spotifyEmbedUrl}
-                      width="100%"
-                      height="152"
-                      frameBorder="0"
-                      allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                      loading="lazy"
-                      className="w-full"
-                      title="Vista previa Playlist Spotify"
-                    />
-                  </div>
-                )}
-              </>
-            );
-          })()}
-        </div>
-
-        {/* GALERÍA DE FOTOS PRENUPCIALES */}
-        <div className="md:col-span-2 space-y-2">
-          {(() => {
-            const galleryList = form.galleryUrlsText
-              .split('\n')
-              .map((s) => s.trim())
-              .filter(Boolean);
-
-            return (
-              <>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <label className="block text-xs font-medium text-stone-600">
-                      Galería de Fotos Prenupciales
-                    </label>
-                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
-                      {galleryList.length} foto{galleryList.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      ref={galleryInputRef}
-                      type="file"
-                      multiple
-                      accept="image/*"
-                      onChange={handleGalleryUpload}
-                      className="hidden"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => galleryInputRef.current?.click()}
-                      disabled={uploadingGallery}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-700 transition disabled:opacity-50"
-                    >
-                      {uploadingGallery ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />
-                      ) : (
-                        <Upload className="h-3.5 w-3.5 text-amber-700" />
+        {/* MÚSICA DE FONDO, PLAYLIST SPOTIFY Y GALERÍA PRENUPCIAL (Solo Plan Premium) */}
+        {!isClassicPlan && (
+          <>
+            <div className="space-y-2">
+              {(() => {
+                const parsedAudio = parseAudioSource(form.musicUrl);
+                return (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-medium text-stone-600">
+                        Música de Fondo (YouTube / Spotify / MP3)
+                      </label>
+                      {parsedAudio.type === 'youtube' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-medium text-red-700 border border-red-200">
+                          <Video className="h-3 w-3" /> YouTube Video
+                        </span>
                       )}
-                      <span>{uploadingGallery ? 'Subiendo fotos...' : 'Subir Fotos (Múltiples)'}</span>
-                    </button>
-                  </div>
-                </div>
+                      {parsedAudio.type === 'spotify' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-200">
+                          <Disc3 className="h-3 w-3" /> Spotify Track
+                        </span>
+                      )}
+                      {parsedAudio.type === 'mp3' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 border border-amber-200">
+                          <Music className="h-3 w-3" /> Archivo MP3
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="url"
+                      value={form.musicUrl}
+                      onChange={(e) => setForm((p) => ({ ...p, musicUrl: e.target.value }))}
+                      placeholder="https://www.youtube.com/watch?v=... o link de Spotify o archivo .mp3"
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
+                    />
+                    <p className="text-[11px] text-stone-500">
+                      Esta canción sonará automáticamente al abrir el sobre de gala o con el reproductor de vinilo.
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
 
-                {/* Mosaico de Miniaturas con Borrado Rápido */}
-                {galleryList.length > 0 && (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 p-2 rounded-xl bg-stone-50 border border-stone-200 max-h-48 overflow-y-auto">
-                    {galleryList.map((url, idx) => (
-                      <div key={idx} className="relative group rounded-lg overflow-hidden border border-stone-300 aspect-square bg-stone-200">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={resolveAssetUrl(url)}
-                          alt={`Foto galería ${idx + 1}`}
-                          className="w-full h-full object-cover"
-                        />
+            {/* PLAYLIST DE SPOTIFY DE LA BODA */}
+            <div className="md:col-span-2 space-y-2">
+              {(() => {
+                const spotifyEmbedUrl = getSpotifyPlaylistEmbedUrl(form.spotifyPlaylistUrl);
+                return (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-medium text-stone-600">
+                        Playlist de Spotify de la Boda (Opcional)
+                      </label>
+                      {form.spotifyPlaylistUrl && (
                         <a
-                          href={resolveAssetUrl(url)}
+                          href={form.spotifyPlaylistUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="absolute bottom-1 left-1 bg-black/75 hover:bg-black text-white rounded p-1 opacity-0 group-hover:opacity-100 transition shadow"
-                          title="Ver en resolución completa"
+                          className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:underline font-medium"
                         >
-                          <ExternalLink className="h-3 w-3" />
+                          <ExternalLink className="h-3 w-3" /> Abrir en Spotify
                         </a>
+                      )}
+                    </div>
+                    <input
+                      type="url"
+                      value={form.spotifyPlaylistUrl}
+                      onChange={(e) => setForm((p) => ({ ...p, spotifyPlaylistUrl: e.target.value }))}
+                      placeholder="https://open.spotify.com/playlist/37i9dQZF1DXcBWIGoYBM5M"
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-sm"
+                    />
+                    <p className="text-[11px] text-stone-500">
+                      Pega el enlace de la lista de reproducción de la boda. Se desplegará el reproductor oficial interactivo de Spotify en la invitación para tus invitados.
+                    </p>
+
+                    {spotifyEmbedUrl && (
+                      <div className="mt-2 rounded-2xl overflow-hidden border border-emerald-200/80 bg-stone-900 shadow-md">
+                        <iframe
+                          src={spotifyEmbedUrl}
+                          width="100%"
+                          height="152"
+                          frameBorder="0"
+                          allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                          loading="lazy"
+                          className="w-full"
+                          title="Vista previa Playlist Spotify"
+                        />
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* GALERÍA DE FOTOS PRENUPCIALES */}
+            <div className="md:col-span-2 space-y-2">
+              {(() => {
+                const galleryList = form.galleryUrlsText
+                  .split('\n')
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+
+                return (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <label className="block text-xs font-medium text-stone-600">
+                          Galería de Fotos Prenupciales
+                        </label>
+                        <span className="rounded-full bg-stone-100 px-2 py-0.5 text-[10px] font-semibold text-stone-600">
+                          {galleryList.length} foto{galleryList.length === 1 ? '' : 's'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          ref={galleryInputRef}
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          onChange={handleGalleryUpload}
+                          className="hidden"
+                        />
                         <button
                           type="button"
-                          onClick={() => handleRemoveGalleryImage(idx)}
-                          className="absolute top-1 right-1 bg-black/75 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow"
-                          title="Eliminar de la galería"
+                          onClick={() => galleryInputRef.current?.click()}
+                          disabled={uploadingGallery}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 px-2.5 py-1 text-[11px] font-medium text-stone-700 transition disabled:opacity-50"
                         >
-                          <X className="h-3 w-3" />
+                          {uploadingGallery ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-700" />
+                          ) : (
+                            <Upload className="h-3.5 w-3.5 text-amber-700" />
+                          )}
+                          <span>{uploadingGallery ? 'Subiendo fotos...' : 'Subir Fotos (Múltiples)'}</span>
                         </button>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    </div>
 
-                <textarea
-                  rows={3}
-                  value={form.galleryUrlsText}
-                  onChange={(e) => setForm((p) => ({ ...p, galleryUrlsText: e.target.value }))}
-                  placeholder="https://ejemplo.com/foto1.jpg&#10;https://ejemplo.com/foto2.jpg"
-                  className="w-full rounded-xl border border-stone-300 p-2.5 text-xs font-mono"
-                />
-                <p className="text-[11px] text-stone-500">
-                  Puedes subir fotos directamente con el botón o pegar URLs externas (una por línea). Se desplegarán en el mosaico editorial de la invitación.
-                </p>
-              </>
-            );
-          })()}
-        </div>
+                    {/* Mosaico de Miniaturas con Borrado Rápido */}
+                    {galleryList.length > 0 && (
+                      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2 p-2 rounded-xl bg-stone-50 border border-stone-200 max-h-48 overflow-y-auto">
+                        {galleryList.map((url, idx) => (
+                          <div key={idx} className="relative group rounded-lg overflow-hidden border border-stone-300 aspect-square bg-stone-200">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={resolveAssetUrl(url)}
+                              alt={`Foto galería ${idx + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            <a
+                              href={resolveAssetUrl(url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="absolute bottom-1 left-1 bg-black/75 hover:bg-black text-white rounded p-1 opacity-0 group-hover:opacity-100 transition shadow"
+                              title="Ver en resolución completa"
+                            >
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveGalleryImage(idx)}
+                              className="absolute top-1 right-1 bg-black/75 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition shadow"
+                              title="Eliminar de la galería"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <textarea
+                      rows={3}
+                      value={form.galleryUrlsText}
+                      onChange={(e) => setForm((p) => ({ ...p, galleryUrlsText: e.target.value }))}
+                      placeholder="https://ejemplo.com/foto1.jpg&#10;https://ejemplo.com/foto2.jpg"
+                      className="w-full rounded-xl border border-stone-300 p-2.5 text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-stone-500">
+                      Puedes subir fotos directamente con el botón o pegar URLs externas (una por línea). Se desplegarán en el mosaico editorial de la invitación.
+                    </p>
+                  </>
+                );
+              })()}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Textos y Mensajes 100% Parametrizables */}

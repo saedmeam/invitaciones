@@ -51,7 +51,12 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
   const [event] = useState<WeddingEvent>(initialEvent);
   const [group, setGroup] = useState<GuestGroup | null>(initialGroup || null);
 
-  const planTier = event.themeConfig?.planTier === 'CLASSIC' ? 'CLASSIC' : 'PREMIUM';
+  const isPlannerEvent = event.organizationType === 'PLANNER';
+  const planTier = isPlannerEvent
+    ? 'PREMIUM'
+    : event.themeConfig?.planTier === 'CLASSIC'
+      ? 'CLASSIC'
+      : 'PREMIUM';
   const isClassicPlan = planTier === 'CLASSIC';
 
   const [envelopeOpen, setEnvelopeOpen] = useState(isClassicPlan);

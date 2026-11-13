@@ -8,6 +8,7 @@ import {
   IGuestRepository,
 } from '../../domain/ports/Repositories';
 import { RsvpDomainService } from '../../domain/services/RsvpDomainService';
+import { AppError } from '../../shared/errors/AppError';
 import { AuthActor, ensureEventAccess } from '../helpers/AccessControlHelper';
 
 export interface SendDispatchDto {
@@ -121,6 +122,15 @@ export class DispatchUseCases {
 
   async sendBatch(eventId: string, actor: AuthActor, dto: SendDispatchDto) {
     const event = await ensureEventAccess(this.eventRepo, eventId, actor);
+    const isClassicDirect =
+      event.organizationType !== 'PLANNER' && event.themeConfig?.planTier === 'CLASSIC';
+    if (isClassicDirect) {
+      throw new AppError(
+        'El envío automatizado por WhatsApp y Gmail está incluido exclusivamente en el Plan Premium. Solicita al administrador actualizar esta boda al Plan Premium.',
+        403,
+        'PLAN_RESTRICTION'
+      );
+    }
     const allGroups = await this.guestRepo.findByEvent(eventId);
 
     let targets = allGroups;

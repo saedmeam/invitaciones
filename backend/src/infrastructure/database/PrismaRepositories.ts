@@ -88,6 +88,7 @@ function mapEvent(row: any): EventEntity {
     isActive: row.isActive,
     organizationId: row.organizationId ?? null,
     organizationName: row.organization?.name ?? null,
+    organizationType: row.organization?.type ?? null,
     ownerId: row.ownerId,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -446,7 +447,7 @@ export class PrismaEventRepository implements IEventRepository {
   constructor(private readonly db: PrismaClient) {}
 
   private readonly eventInclude = {
-    organization: { select: { name: true } },
+    organization: { select: { name: true, type: true } },
   };
 
   async findAll(organizationId?: string): Promise<EventEntity[]> {

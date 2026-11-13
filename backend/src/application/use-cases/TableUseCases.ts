@@ -60,8 +60,21 @@ export class TableUseCases {
     };
   }
 
+  private ensureSeatingAllowed(event: { organizationType?: 'DIRECT' | 'PLANNER' | null; themeConfig?: { planTier?: string } }) {
+    const isClassicDirect =
+      event.organizationType !== 'PLANNER' && event.themeConfig?.planTier === 'CLASSIC';
+    if (isClassicDirect) {
+      throw new AppError(
+        'La distribución de mesas (Seating Plan) está incluida en el Plan Premium.',
+        403,
+        'PLAN_RESTRICTION'
+      );
+    }
+  }
+
   async createTable(eventId: string, actor: AuthActor, dto: CreateTableDto) {
-    await ensureEventAccess(this.eventRepo, eventId, actor);
+    const event = await ensureEventAccess(this.eventRepo, eventId, actor);
+    this.ensureSeatingAllowed(event);
     const existing = await this.tableRepo.findByEvent(eventId);
     const capacity = Math.max(1, Math.min(30, Number(dto.capacity) || 8));
 
@@ -114,7 +127,8 @@ export class TableUseCases {
     actor: AuthActor,
     dto: { memberId?: string; memberIds?: string[]; groupId?: string; seatNumber?: number | null }
   ) {
-    await ensureEventAccess(this.eventRepo, eventId, actor);
+    const event = await ensureEventAccess(this.eventRepo, eventId, actor);
+    this.ensureSeatingAllowed(event);
     const table = await this.tableRepo.findById(tableId);
     if (!table || table.eventId !== eventId) {
       throw new AppError('Mesa no encontrada', 404, 'NOT_FOUND');

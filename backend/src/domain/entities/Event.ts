@@ -149,6 +149,7 @@ export interface EventEntity {
   isActive: boolean;
   organizationId: string | null;
   organizationName?: string | null;
+  organizationType?: 'DIRECT' | 'PLANNER' | null;
   ownerId: string;
   createdAt: Date;
   updatedAt: Date;

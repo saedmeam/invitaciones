@@ -86,6 +86,13 @@ export class MediaAndWishUseCases {
       if (!event || !event.isActive) {
         throw new AppError('Evento no encontrado o inactivo', 404, 'NOT_FOUND');
       }
+      if (event.organizationType !== 'PLANNER' && event.themeConfig?.planTier === 'CLASSIC') {
+        throw new AppError(
+          'El álbum colaborativo de fotos y videos está disponible en el Plan Premium.',
+          403,
+          'PLAN_RESTRICTION'
+        );
+      }
 
       if (event.photoPin && event.photoPin.trim() !== '') {
         if ((params.pin || '').trim() !== event.photoPin.trim()) {
@@ -230,6 +237,13 @@ export class MediaAndWishUseCases {
     const event = await this.eventRepo.findBySlug(slug);
     if (!event || !event.isActive) {
       throw new AppError('Evento no encontrado', 404, 'NOT_FOUND');
+    }
+    if (event.organizationType !== 'PLANNER' && event.themeConfig?.planTier === 'CLASSIC') {
+      throw new AppError(
+        'El muro de buenos deseos está disponible en el Plan Premium.',
+        403,
+        'PLAN_RESTRICTION'
+      );
     }
     const cleanAuthor = this.sanitizeText(authorName);
     const cleanMsg = this.sanitizeText(message);

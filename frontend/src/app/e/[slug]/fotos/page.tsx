@@ -104,6 +104,31 @@ export default function EventPhotoUploadPage() {
   }
 
   const theme = THEME_REGISTRY[event.theme] || THEME_REGISTRY.ROMANTIC_EDITORIAL;
+  const isClassicPlan =
+    event.organizationType !== 'PLANNER' && event.themeConfig?.planTier === 'CLASSIC';
+
+  if (isClassicPlan) {
+    return (
+      <main className={`min-h-screen flex items-center justify-center ${theme.pageBg} ${theme.textPrimary} p-6`}>
+        <div className={`max-w-md w-full rounded-3xl border ${theme.borderClass} ${theme.surfaceBg} p-8 text-center space-y-4 shadow-sm`}>
+          <Camera className={`h-10 w-10 mx-auto ${theme.accentText}`} />
+          <h1 className="font-serif text-2xl font-semibold">
+            {event.partnerOneName} &amp; {event.partnerTwoName}
+          </h1>
+          <p className={`text-sm ${theme.textMuted}`}>
+            El álbum colaborativo QR no está habilitado para este evento.
+          </p>
+          <Link
+            href={`/e/${event.slug}`}
+            className={`inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-xs font-semibold uppercase tracking-wider ${theme.buttonPrimary}`}
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Volver a la invitación
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${theme.pageBg} ${theme.textPrimary} py-10 px-4`}>

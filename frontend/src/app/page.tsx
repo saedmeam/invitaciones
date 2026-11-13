@@ -39,6 +39,8 @@ export default async function HomePage() {
 
   const theme = THEME_REGISTRY[event.theme] || THEME_REGISTRY.ROMANTIC_EDITORIAL;
   const content = event.contentConfig || {};
+  const isClassicPlan =
+    event.organizationType !== 'PLANNER' && event.themeConfig?.planTier === 'CLASSIC';
   const formattedDate = new Date(event.eventDate).toLocaleDateString('es-EC', {
     day: 'numeric',
     month: 'long',
@@ -74,7 +76,7 @@ export default async function HomePage() {
             'Con mucha alegría queremos compartir contigo el día más especial de nuestras vidas.'}
         </p>
 
-        <div className="grid sm:grid-cols-2 gap-4 pt-2">
+        <div className={`grid ${isClassicPlan ? 'grid-cols-1 max-w-xs mx-auto' : 'sm:grid-cols-2'} gap-4 pt-2`}>
           <Link
             href={`/e/${event.slug}`}
             className={`flex flex-col items-center gap-2 rounded-2xl p-5 transition shadow-sm ${theme.buttonPrimary}`}
@@ -86,18 +88,20 @@ export default async function HomePage() {
             <span className="text-xs opacity-85">Detalles, horarios y ubicaciones</span>
           </Link>
 
-          <Link
-            href={`/e/${event.slug}/fotos`}
-            className={`flex flex-col items-center gap-2 rounded-2xl border ${theme.borderClass} ${theme.surfaceMutedBg} p-5 hover:opacity-90 transition`}
-          >
-            <Camera className={`h-6 w-6 ${theme.accentText}`} />
-            <span className="font-semibold text-sm">
-              {content.homePhotosLabel || 'Álbum de Fotos'}
-            </span>
-            <span className={`text-xs ${theme.textMuted}`}>
-              Comparte tus fotos y videos del evento
-            </span>
-          </Link>
+          {!isClassicPlan && (
+            <Link
+              href={`/e/${event.slug}/fotos`}
+              className={`flex flex-col items-center gap-2 rounded-2xl border ${theme.borderClass} ${theme.surfaceMutedBg} p-5 hover:opacity-90 transition`}
+            >
+              <Camera className={`h-6 w-6 ${theme.accentText}`} />
+              <span className="font-semibold text-sm">
+                {content.homePhotosLabel || 'Álbum de Fotos'}
+              </span>
+              <span className={`text-xs ${theme.textMuted}`}>
+                Comparte tus fotos y videos del evento
+              </span>
+            </Link>
+          )}
         </div>
 
         <div className={`pt-4 border-t ${theme.borderClass}`}>

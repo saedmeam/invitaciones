@@ -217,6 +217,15 @@ export default function AdminDashboardPage() {
     }
   }, [token, selectedEventId, currentUser, loadEventDetails]);
 
+  useEffect(() => {
+    const isClassic =
+      selectedEvent?.organizationType !== 'PLANNER' &&
+      selectedEvent?.themeConfig?.planTier === 'CLASSIC';
+    if (isClassic && (activeTab === 'TABLES' || activeTab === 'DISPATCH' || activeTab === 'MEDIA')) {
+      setActiveTab('STATS');
+    }
+  }, [selectedEvent, activeTab]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoggingIn(true);
@@ -468,6 +477,10 @@ export default function AdminDashboardPage() {
     return matchesStatus && matchesSearch;
   });
 
+  const isClassicEvent =
+    selectedEvent?.organizationType !== 'PLANNER' &&
+    selectedEvent?.themeConfig?.planTier === 'CLASSIC';
+
   const navTabs = [
     ...(isSuperAdmin
       ? [
@@ -480,10 +493,16 @@ export default function AdminDashboardPage() {
       : []),
     { id: 'STATS' as AdminTab, label: 'Estadísticas & Resumen', icon: BarChart3 },
     { id: 'GUESTS' as AdminTab, label: 'Invitados & RSVP', icon: Users },
-    { id: 'TABLES' as AdminTab, label: 'Mesas & Salón', icon: LayoutGrid },
-    { id: 'DISPATCH' as AdminTab, label: 'WhatsApp & Gmail', icon: Send },
+    ...(!isClassicEvent
+      ? [
+          { id: 'TABLES' as AdminTab, label: 'Mesas & Salón', icon: LayoutGrid },
+          { id: 'DISPATCH' as AdminTab, label: 'WhatsApp & Gmail', icon: Send },
+        ]
+      : []),
     { id: 'CUSTOMIZE' as AdminTab, label: 'Diseño & Secciones', icon: Palette },
-    { id: 'MEDIA' as AdminTab, label: 'Álbum Digital & Deseos', icon: Camera },
+    ...(!isClassicEvent
+      ? [{ id: 'MEDIA' as AdminTab, label: 'Álbum Digital & Deseos', icon: Camera }]
+      : []),
   ];
 
   const renderSidebarContent = () => (
@@ -963,20 +982,22 @@ export default function AdminDashboardPage() {
                         <FileText className="h-3.5 w-3.5" />
                         Descargar Resumen (PDF)
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          try {
-                            exportWishesPdf(selectedEvent, wishes);
-                          } catch (err) {
-                            toast.error(err instanceof Error ? err.message : 'No se pudo generar el PDF');
-                          }
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 px-3.5 py-2 text-xs font-semibold text-stone-800 hover:bg-stone-50"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Libro de Deseos (PDF)
-                      </button>
+                      {!isClassicEvent && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try {
+                              exportWishesPdf(selectedEvent, wishes);
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'No se pudo generar el PDF');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 px-3.5 py-2 text-xs font-semibold text-stone-800 hover:bg-stone-50"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Libro de Deseos (PDF)
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1246,7 +1267,7 @@ export default function AdminDashboardPage() {
                                 >
                                   <ExternalLink className="h-3.5 w-3.5" />
                                 </a>
-                                {g.phone && (
+                                {g.phone && !isClassicEvent && (
                                   <a
                                     href={`https://wa.me/${g.phone.replace(/[^\d]/g, '')}?text=${encodeURIComponent(
                                       `Hola ${g.groupName}, te compartimos tu invitación de matrimonio: ${inviteLink}`
@@ -1287,7 +1308,7 @@ export default function AdminDashboardPage() {
             )}
 
             {/* TAB 3: MESAS Y PUESTOS */}
-            {activeTab === 'TABLES' && (
+            {activeTab === 'TABLES' && !isClassicEvent && (
               <AdminSeatingTab
                 event={selectedEvent}
                 onSeatingChanged={() => loadEventDetails(selectedEvent.id, currentUser?.role)}
@@ -1295,7 +1316,7 @@ export default function AdminDashboardPage() {
             )}
 
             {/* TAB 4: WHATSAPP QR & GMAIL */}
-            {activeTab === 'DISPATCH' && (
+            {activeTab === 'DISPATCH' && !isClassicEvent && (
               <AdminDispatchTab event={selectedEvent} guests={guests} />
             )}
 
@@ -1304,6 +1325,7 @@ export default function AdminDashboardPage() {
               <AdminCustomizerTab
                 key={selectedEvent.id}
                 event={selectedEvent}
+                isSuperAdmin={isSuperAdmin}
                 onUpdated={(updated) => {
                   setEvents((prev) => prev.map((e) => (e.id === updated.id ? updated : e)));
                 }}
@@ -1311,7 +1333,7 @@ export default function AdminDashboardPage() {
             )}
 
             {/* TAB 6: ÁLBUM QR DRIVE & DESEOS */}
-            {activeTab === 'MEDIA' && (
+            {activeTab === 'MEDIA' && !isClassicEvent && (
               <div className="space-y-6">
                 {qrInfo && (
                   <div className="bg-white rounded-2xl border border-stone-200 p-6 flex flex-col md:flex-row items-center justify-between gap-6">
