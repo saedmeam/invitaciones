@@ -129,30 +129,48 @@ export class RsvpDomainService {
   }
 
   static buildIcsCalendar(event: EventEntity): string {
-    const start = event.eventDate;
-    const end = new Date(start.getTime() + 6 * 60 * 60 * 1000);
-    const fmt = (d: Date) =>
-      d
-        .toISOString()
-        .replace(/[-:]/g, '')
-        .replace(/\.\d{3}Z$/, 'Z');
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const baseDate = event.eventDate;
+    const year = baseDate.getUTCFullYear();
+    const month = baseDate.getUTCMonth();
+    const day = baseDate.getUTCDate();
+
+    let startHour = 16;
+    let startMinute = 0;
+    if (event.ceremonyTime) {
+      const parts = event.ceremonyTime.split(':').map(Number);
+      if (!isNaN(parts[0])) startHour = parts[0];
+      if (!isNaN(parts[1])) startMinute = parts[1];
+    }
+
+    const start = new Date(Date.UTC(year, month, day, startHour, startMinute, 0));
+    const end = new Date(start.getTime() + 8 * 60 * 60 * 1000); // 8 horas de duración estimada
+
+    const fmtFloating = (d: Date) =>
+      `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00`;
 
     const title = `Boda ${event.partnerOneName} & ${event.partnerTwoName}`;
     const location = event.ceremonyAddress || event.ceremonyMapUrl || 'Por confirmar';
-    const description = `${event.ceremonyTitle} (${event.ceremonyTime}) - ${event.ceremonyMapUrl} | ${event.receptionTitle} (${event.receptionTime}) - ${event.receptionMapUrl}`;
+    const description = `${event.ceremonyTitle || 'Ceremonia'} (${event.ceremonyTime || '16:00'}) - ${event.ceremonyAddress || ''} | ${event.receptionTitle || 'Recepción'} (${event.receptionTime || '19:00'}) - ${event.receptionAddress || ''}`;
+
+    const now = new Date();
+    const dtstamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
 
     return [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//WeddingInvitations//ES',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
       'BEGIN:VEVENT',
-      `UID:${event.id}@invitaciones.local`,
-      `DTSTAMP:${fmt(new Date())}`,
-      `DTSTART:${fmt(start)}`,
-      `DTEND:${fmt(end)}`,
+      `UID:${event.id || event.slug}@invitaciones.local`,
+      `DTSTAMP:${dtstamp}`,
+      `DTSTART:${fmtFloating(start)}`,
+      `DTEND:${fmtFloating(end)}`,
       `SUMMARY:${title}`,
       `LOCATION:${location}`,
       `DESCRIPTION:${description}`,
+      'STATUS:CONFIRMED',
       'END:VEVENT',
       'END:VCALENDAR',
     ].join('\r\n');

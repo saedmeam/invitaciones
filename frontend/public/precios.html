@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tarifario Comercial — Invitaciones de Boda Digitales Interactivas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&family=Pinyon+Script&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: radial-gradient(circle at 50% 0%, #201a1d 0%, #0d0c0e 100%);
+      font-family: 'Montserrat', sans-serif;
+      color: #f7f5f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 1100px;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(176, 141, 87, 0.25);
+      border-radius: 32px;
+      padding: 48px 36px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+    }
+    .header { text-align: center; margin-bottom: 40px; }
+    .badge-top {
+      display: inline-block;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 3px;
+      font-weight: 600;
+      color: #b08d57;
+      border: 1px solid rgba(176, 141, 87, 0.4);
+      padding: 6px 16px;
+      border-radius: 50px;
+      margin-bottom: 12px;
+      background: rgba(176, 141, 87, 0.08);
+    }
+    h1 {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 42px;
+      font-weight: 400;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      font-size: 13px;
+      font-weight: 300;
+      color: #a8a29e;
+      max-width: 600px;
+      margin: 0 auto;
+    }
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+      gap: 24px;
+      margin-bottom: 40px;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      padding: 32px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+    .card.popular {
+      background: linear-gradient(180deg, rgba(141, 43, 61, 0.18) 0%, rgba(20, 18, 20, 0.6) 100%);
+      border: 1px solid rgba(176, 141, 87, 0.6);
+      transform: translateY(-6px);
+      box-shadow: 0 12px 30px rgba(141, 43, 61, 0.25);
+    }
+    .card-badge {
+      position: absolute;
+      top: -12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: linear-gradient(135deg, #b08d57 0%, #8d2b3d 100%);
+      color: #ffffff;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      font-weight: 700;
+      padding: 4px 14px;
+      border-radius: 50px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+    }
+    .card-title {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 26px;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+    .card-desc {
+      font-size: 11px;
+      color: #78716c;
+      min-height: 32px;
+      margin-bottom: 20px;
+      line-height: 1.4;
+    }
+    .price-box {
+      margin-bottom: 24px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      padding-bottom: 20px;
+    }
+    .old-price {
+      text-decoration: line-through;
+      color: #78716c;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .current-price {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 48px;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .currency { font-size: 24px; color: #b08d57; font-family: 'Montserrat', sans-serif; font-weight: 400; }
+    .period { font-size: 11px; color: #a8a29e; font-weight: 400; }
+    .features { list-style: none; margin-bottom: 28px; space-y: 10px; }
+    .features li {
+      font-size: 12px;
+      color: #d6d3d1;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      line-height: 1.4;
+    }
+    .features li span.icon { color: #b08d57; font-weight: bold; }
+    .btn {
+      display: block;
+      width: 100%;
+      text-align: center;
+      padding: 14px;
+      border-radius: 14px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .btn-outline {
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #ffffff;
+      background: transparent;
+    }
+    .btn-gold {
+      background: linear-gradient(135deg, #b08d57 0%, #8d2b3d 100%);
+      color: #ffffff;
+      border: none;
+      box-shadow: 0 4px 15px rgba(176, 141, 87, 0.3);
+    }
+    .btn:hover { opacity: 0.9; transform: scale(1.02); }
+    .footer-note {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 11px;
+      color: #78716c;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 20px;
+    }
+    .b2b-banner {
+      background: rgba(176, 141, 87, 0.08);
+      border: 1px solid rgba(176, 141, 87, 0.3);
+      border-radius: 20px;
+      padding: 20px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-top: 28px;
+    }
+    .b2b-title { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: #ffffff; }
+    .b2b-desc { font-size: 11px; color: #d6d3d1; max-width: 650px; }
+    .btn-planner {
+      background: #ffffff;
+      color: #1c1917;
+      padding: 10px 20px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <div class="header">
+      <div class="badge-top">Tarifario Oficial &amp; Oferta de Temporada</div>
+      <h1>Invitaciones Digitales Interactivas</h1>
+      <p class="subtitle">Una experiencia nupcial editorial de alta costura para los novios y sus invitados con control en tiempo real.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:18px" class="no-print">
+        <a href="/uploads/presentacion.pptx" download class="btn btn-gold" style="width:auto;padding:10px 18px">Descargar Presentación (.PPTX)</a>
+        <button type="button" onclick="window.print()" class="btn btn-outline" style="width:auto;padding:10px 18px;cursor:pointer">Descargar Tarifario (.PDF)</button>
+        <button type="button" onclick="document.getElementById('modal-planners').classList.add('open')" class="btn btn-outline" style="width:auto;padding:10px 18px;cursor:pointer">Ver Planes B2B (Planners &amp; Salones)</button>
+      </div>
+    </div>
+
+    <div class="pricing-grid" style="grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); max-width: 880px; margin-left: auto; margin-right: auto;">
+      <!-- PLAN CLÁSICO -->
+      <div class="card">
+        <div>
+          <h2 class="card-title">Plan Clásico</h2>
+          <p class="card-desc">Invitación digital web elegante, directa y funcional. Incluye hasta <strong>6 meses de publicación activa</strong> (5 meses previos + 1 mes post-boda).</p>
+          <div class="price-box">
+            <div class="old-price">Precio Lista $99 USD · Oficial $75 USD</div>
+            <div class="current-price"><span class="currency">$</span>69 <span class="period">USD / promo lanzamiento</span></div>
+          </div>
+          <ul class="features">
+            <li><span class="icon">✓</span> Invitación web responsive interactiva (abre directo sin sobre 3D)</li>
+            <li><span class="icon">✓</span> <strong>Hasta 6 meses activa</strong> (ideal enviar 3 a 5 meses antes de la boda)</li>
+            <li><span class="icon">✓</span> Cuenta regresiva ceremonial y bienvenida personalizada</li>
+            <li><span class="icon">✓</span> Google Maps &amp; Waze para Ceremonia y Recepción</li>
+            <li><span class="icon">✓</span> Agendar en Google Calendar &amp; Apple .ICS (1 clic)</li>
+            <li><span class="icon">✓</span> Confirmación RSVP en tiempo real y código de vestimenta</li>
+            <li><span class="icon">✓</span> Lluvia de sobres, mesa de regalos y datos bancarios</li>
+            <li style="color:#78716c"><span class="icon" style="color:#57534e">✗</span> Sin sobre 3D animado con lacre ni monograma</li>
+            <li style="color:#78716c"><span class="icon" style="color:#57534e">✗</span> Sin música de fondo ni reproductor Spotify</li>
+            <li style="color:#78716c"><span class="icon" style="color:#57534e">✗</span> Sin pétalos 3D, galería prenupcial, mesas ni álbum QR</li>
+          </ul>
+        </div>
+        <a href="https://wa.me/?text=Hola%2C%20me%20interesa%20el%20Plan%20Cl%C3%A1sico%20(%2469%20USD%20promo)%20para%20nuestra%20boda" target="_blank" rel="noopener" class="btn btn-outline">Elegir Plan Clásico</a>
+      </div>
+
+      <!-- PLAN PREMIUM (TODO INCLUIDO) -->
+      <div class="card popular">
+        <div class="card-badge">Todo Incluido • Más Elegido (6 Meses Activa)</div>
+        <div>
+          <h2 class="card-title">Plan Premium</h2>
+          <p class="card-desc">La experiencia nupcial completa: Sobre 3D, música, pétalos, mesas, fotos en tu Google Drive y WhatsApp QR.</p>
+          <div class="price-box">
+            <div class="old-price">Precio Lista $149 USD · Oficial $109 USD</div>
+            <div class="current-price"><span class="currency">$</span>99 <span class="period">USD / promo lanzamiento</span></div>
+          </div>
+          <ul class="features">
+            <li><span class="icon">★</span> <strong>Todo lo del Plan Clásico + 6 meses de publicación activa</strong></li>
+            <li><span class="icon">✓</span> <strong>Sobre animado 3D</strong> con sello de lacre y monograma de iniciales</li>
+            <li><span class="icon">✓</span> <strong>Música de fondo automática</strong> y playlist integrada de Spotify</li>
+            <li><span class="icon">✓</span> <strong>Lluvia de pétalos de rosa 3D</strong> y 12 temas de gala exclusivos</li>
+            <li><span class="icon">✓</span> Galería prenupcial en alta resolución con visor lightbox</li>
+            <li><span class="icon">✓</span> <strong>Distribución de Mesas (Seating Plan)</strong> y Muro de Buenos Deseos</li>
+            <li><span class="icon">✓</span> <strong>Álbum Colaborativo QR</strong> sincronizado al Google Photos/Drive de los novios</li>
+            <li><span class="icon">✓</span> <strong>Difusión por WhatsApp</strong> con pase ceremonial QR único por familia</li>
+            <li><span class="icon">✓</span> Descarga de Libro de Deseos y Resumen de Boda en <strong>PDF</strong></li>
+          </ul>
+        </div>
+        <a href="https://wa.me/?text=Hola%2C%20me%20interesa%20el%20Plan%20Premium%20Todo%20Incluido%20(%2499%20USD%20promo)%20para%20nuestra%20boda" target="_blank" rel="noopener" class="btn btn-gold">Elegir Plan Premium</a>
+      </div>
+    </div>
+
+    <!-- BANNER WEDDING PLANNERS (B2B) -->
+    <div class="b2b-banner">
+      <div>
+        <h3 class="b2b-title">¿Eres Wedding Planner o Salón de Eventos?</h3>
+        <p class="b2b-desc">En nuestro plan para Planners <strong>todas tus bodas incluyen el 100% de funciones del Plan Premium y hasta 6 meses de vigencia por boda</strong>. Elige entre <strong>Suscripción Mensual por bodas activas (2, 5, 10, 20 o ilimitadas)</strong> o <strong>Pago Único por Boda Activada (desde $35 USD)</strong>.</p>
+      </div>
+      <button type="button" class="btn-planner" onclick="document.getElementById('modal-planners').classList.add('open')">Alianza Planners</button>
+    </div>
+
+    <!-- MODAL ALIANZA PLANNERS -->
+    <style>
+      .modal-bg { position: fixed; inset: 0; background: rgba(8,7,8,.78); backdrop-filter: blur(8px); display: none; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+      .modal-bg.open { display: flex; }
+      .modal { background: #1a1618; border: 1px solid rgba(176,141,87,.5); border-radius: 24px; max-width: 960px; width: 100%; max-height: 90vh; overflow-y: auto; padding: 32px; position: relative; }
+      .modal h3 { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 400; color: #fff; margin-bottom: 4px; }
+      .modal .sub { color: #a8a29e; font-size: 13px; margin-bottom: 22px; line-height: 1.5; }
+      .modal .close { position: absolute; top: 14px; right: 18px; background: none; border: 0; color: #a8a29e; font-size: 26px; cursor: pointer; }
+      .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+      .m-col { background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 18px; padding: 20px; }
+      .m-col h4 { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: #b08d57; margin-bottom: 12px; }
+      .m-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.07); font-size: 13px; }
+      .m-row:last-child { border-bottom: 0; }
+      .m-row small { display: block; color: #a8a29e; font-size: 11px; margin-top: 2px; }
+      .m-row b { color: #e5c98d; white-space: nowrap; font-family: 'Cormorant Garamond', serif; font-size: 18px; }
+      .m-roi { margin-top: 18px; background: rgba(27,94,63,.18); border: 1px solid rgba(117,190,151,.35); border-radius: 14px; padding: 14px 18px; font-size: 12.5px; color: #d4f2e3; line-height: 1.5; }
+      .m-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 22px; }
+      .m-actions a { text-decoration: none; }
+      @media (max-width: 720px) { .m-grid { grid-template-columns: 1fr; } }
+    </style>
+    <div id="modal-planners" class="modal-bg" onclick="if(event.target===this)this.classList.remove('open')">
+      <div class="modal">
+        <button class="close" type="button" aria-label="Cerrar" onclick="document.getElementById('modal-planners').classList.remove('open')">&times;</button>
+        <h3>Alianza Planners &amp; Salones de Eventos</h3>
+        <p class="sub"><strong>Todas las bodas incluyen Plan Premium 100% completo</strong> (Sobre 3D, Spotify, Pétalos, Mesas, Álbum Google Photos en la nube de cada cliente y WhatsApp QR). Como las invitaciones se envían de <strong>3 a 5 meses antes de la boda</strong>, puedes elegir entre <strong>Suscripción Mensual por bodas activas</strong> o <strong>Pago Único por Boda (con 6 meses de vigencia incluidos)</strong>:</p>
+        <div class="m-grid">
+          <div class="m-col">
+            <h4>Opción 1: Suscripción Mensual (Por bodas activas)</h4>
+            <div class="m-row"><div>Hasta 2 bodas activas en el mes<small>Plan Premium Total · Cupo se libera 30 días post-boda</small></div><b>$59/mes</b></div>
+            <div class="m-row"><div>Hasta 5 bodas activas en el mes<small>Solo $19.80/mes por boda en curso · Marca blanca</small></div><b>$99/mes</b></div>
+            <div class="m-row"><div>Hasta 10 bodas activas en el mes<small>Solo $15.90/mes por boda en curso · Más elegido</small></div><b>$159/mes</b></div>
+            <div class="m-row"><div>Hasta 20 bodas activas en el mes<small>Solo $11.45/mes por boda en curso · Agencias</small></div><b>$229/mes</b></div>
+            <div class="m-row"><div>Bodas Activas Ilimitadas<small>Ideal para Salones de Eventos · Subdominio propio</small></div><b>$299/mes</b></div>
+          </div>
+          <div class="m-col">
+            <h4>Opción 2: Pago Único por Boda (Incluye 6 meses activa)</h4>
+            <div class="m-row"><div>Tramo de 1 a 2 bodas<small>Incluye hasta 6 meses publicada (5 antes + 1 post-boda)</small></div><b>$55 / boda</b></div>
+            <div class="m-row"><div>Tramo de 3 a 5 bodas<small>Incluye hasta 6 meses publicada · Plan Premium Total</small></div><b>$45 / boda</b></div>
+            <div class="m-row"><div>Tramo de 6 a 10 bodas<small>Incluye hasta 6 meses publicada · Ahorro mayorista</small></div><b>$39 / boda</b></div>
+            <div class="m-row"><div>Tramo de 11 a 20+ bodas<small>Incluye hasta 6 meses publicada · Máximo margen</small></div><b>$35 / boda</b></div>
+            <div class="m-row"><div>Extensión adicional (&gt; 6 meses)<small>Para bodas que envían Save the Date 9 a 12 meses antes</small></div><b>+$15 / 3 meses</b></div>
+          </div>
+        </div>
+        <div class="m-roi"><strong>Protocolo Nupcial &amp; Rentabilidad:</strong> Se recomienda publicar y enviar las invitaciones de <strong>3 a 5 meses antes de la boda</strong> para confirmar mesas y catering con anticipación, manteniéndola abierta <strong>30 días después del evento</strong> para descargar el PDF de deseos y fotos. Vendiéndola a tus novios en $99-$109 USD, ganas entre <strong>$54 y $74 USD limpios por cada boda</strong>.</div>
+        <div class="m-actions">
+          <a class="btn btn-gold" href="/uploads/presentacion.pptx" download>Descargar presentación (PPTX)</a>
+          <a class="btn btn-outline" href="https://wa.me/?text=Hola%2C%20quiero%20informaci%C3%B3n%20sobre%20la%20Alianza%20Planners" target="_blank" rel="noopener">Solicitar cuenta Planner por WhatsApp</a>
+        </div>
+      </div>
+    </div>
+    <script>document.addEventListener('keydown',function(e){if(e.key==='Escape')document.getElementById('modal-planners').classList.remove('open');});</script>
+
+    <div class="footer-note">
+      <p>Precios expresados en Dólares de los Estados Unidos (USD). Vigencia estándar incluida: hasta 6 meses activa (recomendado publicar de 3 a 5 meses antes de la boda + 1 mes posterior para descarga de PDF de deseos y álbum en Google Drive del cliente; extensión trimestral opcional por $15 USD). En Ecuador pagos directos vía Transferencia Bancaria o PayPhone (0% ISD).</p>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -34,7 +34,10 @@ export type ParticleEffectType =
   | 'CELESTIAL_SPARKLES'
   | 'NONE';
 
+export type EventPlanTier = 'CLASSIC' | 'PREMIUM';
+
 export interface EventThemeConfig {
+  planTier?: EventPlanTier;
   accentColor?: string;
   musicUrl?: string;
   spotifyPlaylistUrl?: string;
@@ -51,6 +54,7 @@ export interface EventThemeConfig {
   backgroundOpacity?: number;
   backgroundBlur?: number;
   backgroundFixed?: boolean;
+  showDressCodePalette?: boolean;
 }
 
 export interface StoryItem {

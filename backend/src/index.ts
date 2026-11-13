@@ -21,6 +21,6 @@ io.on('connection', (socket) => {
   socket.emit('whatsapp:state', container.whatsappProvider.getState());
 });
 
-server.listen(env.port, () => {
+server.listen(env.port, '0.0.0.0', () => {
   console.log(`Backend Invitaciones escuchando en http://localhost:${env.port}`);
 });

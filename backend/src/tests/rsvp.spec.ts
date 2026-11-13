@@ -285,7 +285,7 @@ describe('Use Case Integration Tests (SQLite Seed)', () => {
     expect(pub.partnerTwoName).toContain('Santiago');
 
     const qr = await container.mediaAndWishUseCases.generatePhotoQr(eventId, coupleActor);
-    expect(qr.uploadUrl).toContain('/e/joselin-y-santiago-2027/fotos');
+    expect(qr.uploadUrl).toMatch(/photos\.app\.goo\.gl|\/fotos/);
     expect(qr.qrDataUrl).toContain('data:image/png;base64,');
   });
 

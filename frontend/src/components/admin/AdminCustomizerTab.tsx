@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   Check,
+  Crown,
   Disc3,
   ExternalLink,
   FolderOpen,
@@ -14,6 +15,7 @@ import {
   Palette,
   Plus,
   Save,
+  ShieldCheck,
   Sliders,
   Sparkles,
   Trash2,
@@ -27,6 +29,7 @@ import { parseAudioSource, getSpotifyPlaylistEmbedUrl } from '@/lib/audioSource'
 import { DriveConfigModal } from './DriveConfigModal';
 import {
   BankAccountItem,
+  EventPlanTier,
   EventSectionsConfig,
   EventTheme,
   FaqItem,
@@ -195,6 +198,7 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
   const [showDriveModal, setShowDriveModal] = useState(false);
   const c = event.contentConfig || {};
   const [form, setForm] = useState({
+    planTier: (event.themeConfig.planTier || 'PREMIUM') as EventPlanTier,
     title: event.title,
     partnerOneName: event.partnerOneName,
     partnerTwoName: event.partnerTwoName,
@@ -284,6 +288,7 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
     const content = event.contentConfig || {};
     setForm((prev) => ({
       ...prev,
+      planTier: (event.themeConfig.planTier || 'PREMIUM') as EventPlanTier,
       title: event.title,
       partnerOneName: event.partnerOneName,
       partnerTwoName: event.partnerTwoName,
@@ -505,6 +510,8 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
         sectionsConfig: form.sectionsConfig,
         themeConfig: {
           ...event.themeConfig,
+          planTier: form.planTier,
+          showDressCodePalette: form.dressCodeShowPalette,
           coverSubtitle: form.coverSubtitle,
           musicUrl: form.musicUrl,
           spotifyPlaylistUrl: form.spotifyPlaylistUrl,
@@ -541,7 +548,7 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
           dressCodeTitle: form.dressCodeTitle,
           dressCodeNote: form.dressCodeNote,
           dressCodeShowPalette: form.dressCodeShowPalette,
-          dressCodePalette: form.dressCodeShowPalette ? form.dressCodePalette : [],
+          dressCodePalette: form.dressCodePalette,
           giftTitle: form.giftTitle,
           giftDescription: form.giftDescription,
           rsvpEyebrow: form.rsvpEyebrow,
@@ -603,6 +610,126 @@ export function AdminCustomizerTab({ event, onUpdated }: AdminCustomizerTabProps
             <Save className="h-3.5 w-3.5" />
             {saving ? 'Guardando...' : 'Guardar Cambios'}
           </button>
+        </div>
+      </div>
+
+      {/* Selector de Nivel de Plan de la Boda */}
+      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-3">
+          <div className="flex items-center gap-2">
+            <Crown className="h-5 w-5 text-amber-700" />
+            <div>
+              <h4 className="font-semibold text-sm text-stone-900">
+                Nivel de Plan &amp; Servicios Habilitados de la Boda
+              </h4>
+              <p className="text-xs text-stone-500">
+                2 planes para parejas (Clásico o Premium). Para Wedding Planners, todas las bodas incluyen Plan Premium completo.
+              </p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+            Plan Actual: <strong className="uppercase">{form.planTier}</strong>
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Plan Clásico */}
+          <div
+            onClick={() => setForm((p) => ({ ...p, planTier: 'CLASSIC' }))}
+            className={`cursor-pointer rounded-2xl border-2 p-5 transition-all relative ${
+              form.planTier === 'CLASSIC'
+                ? 'border-stone-900 bg-stone-50/80 shadow-md ring-1 ring-stone-900'
+                : 'border-stone-200 hover:border-stone-300 bg-white'
+            }`}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                <ShieldCheck className="h-3.5 w-3.5 text-stone-600" />
+                Plan Clásico
+              </span>
+              <div className="text-right">
+                <span className="text-[10px] line-through text-stone-400 mr-1.5">$99</span>
+                <span className="text-sm font-bold text-stone-900">$75 USD</span>
+                <span className="block text-[9px] text-emerald-700 font-medium">Promo: $69 USD (6 meses activa)</span>
+              </div>
+            </div>
+            <h5 className="font-serif text-lg font-medium text-stone-900 mb-1">Clásico Editorial</h5>
+            <p className="text-xs text-stone-500 mb-3 leading-relaxed">
+              Invitación web limpia y directa (abre sin sobre 3D). Vigencia de hasta 6 meses (5 meses antes + 1 mes post-boda).
+            </p>
+            <ul className="text-[11px] text-stone-600 space-y-1.5 pt-2 border-t border-stone-200/60 font-sans">
+              <li className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>Cuenta regresiva, Google Maps y calendario (.ICS)</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                <span>Confirmación RSVP estándar, código de vestimenta y regalos</span>
+              </li>
+              <li className="flex items-center gap-1.5 text-stone-400">
+                <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
+                <span>Sin sobre 3D animado con lacre y monograma</span>
+              </li>
+              <li className="flex items-center gap-1.5 text-stone-400">
+                <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
+                <span>Sin música de fondo ni playlist Spotify</span>
+              </li>
+              <li className="flex items-center gap-1.5 text-stone-400">
+                <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
+                <span>Sin pétalos 3D, galería, mesas ni álbum QR</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Plan Premium */}
+          <div
+            onClick={() => setForm((p) => ({ ...p, planTier: 'PREMIUM' }))}
+            className={`cursor-pointer rounded-2xl border-2 p-5 transition-all relative ${
+              form.planTier === 'PREMIUM'
+                ? 'border-[#b08d57] bg-amber-50/40 shadow-md ring-1 ring-[#b08d57]'
+                : 'border-stone-200 hover:border-amber-300 bg-white'
+            }`}
+          >
+            <div className="absolute -top-2.5 right-4 rounded-full bg-gradient-to-r from-amber-600 to-amber-700 px-2.5 py-0.5 text-[10px] font-bold uppercase text-white shadow-xs">
+              Todo Incluido • Más Elegido
+            </div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                Plan Premium (Parejas &amp; Planners)
+              </span>
+              <div className="text-right">
+                <span className="text-[10px] line-through text-stone-400 mr-1.5">$149</span>
+                <span className="text-sm font-bold text-amber-900">$109 USD</span>
+                <span className="block text-[9px] text-amber-700 font-medium">Promo: $99 USD (6 meses activa)</span>
+              </div>
+            </div>
+            <h5 className="font-serif text-lg font-medium text-stone-900 mb-1">Experiencia Completa</h5>
+            <p className="text-xs text-stone-500 mb-3 leading-relaxed">
+              100% de funciones interactivas, WhatsApp QR y fotos en Google Drive del cliente. Vigencia 6 meses (+$15 por 3 meses extra).
+            </p>
+            <ul className="text-[11px] text-stone-700 space-y-1.5 pt-2 border-t border-amber-200/60 font-sans">
+              <li className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                <span>Sobre 3D animado con monograma &amp; lacre personalizado</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                <span>Música de fondo &amp; reproductor Spotify + Pétalos 3D</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                <span>Galería prenupcial, Seating Plan de mesas y Muro de deseos</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                <span>Álbum QR conectado al Google Photos / Drive del cliente</span>
+              </li>
+              <li className="flex items-center gap-1.5">
+                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                <span>Difusión masiva por WhatsApp &amp; Pase QR por familia</span>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
 

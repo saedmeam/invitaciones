@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { API_BASE_URL, apiFetch, resolveAssetUrl } from '@/lib/api';
 import { getSpotifyPlaylistEmbedUrl, parseAudioSource } from '@/lib/audioSource';
-import { buildGoogleCalendarUrl, buildIcsDownloadUrl } from '@/lib/calendar';
+import { buildGoogleCalendarUrl, buildIcsDownloadUrl, downloadIcsLocally } from '@/lib/calendar';
 import { resolveTheme } from '@/lib/themes';
 import { triggerWeddingConfetti } from '@/lib/confetti';
 import { GuestGroup, MediaAsset, WeddingEvent, WishMessage } from '@/types/invitation';
@@ -50,14 +50,18 @@ interface InvitationViewProps {
 export function InvitationView({ initialEvent, initialGroup, token }: InvitationViewProps) {
   const [event] = useState<WeddingEvent>(initialEvent);
   const [group, setGroup] = useState<GuestGroup | null>(initialGroup || null);
-  const [envelopeOpen, setEnvelopeOpen] = useState(false);
+
+  const planTier = event.themeConfig?.planTier === 'CLASSIC' ? 'CLASSIC' : 'PREMIUM';
+  const isClassicPlan = planTier === 'CLASSIC';
+
+  const [envelopeOpen, setEnvelopeOpen] = useState(isClassicPlan);
   const [playingMusic, setPlayingMusic] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const ytIframeRef = useRef<HTMLIFrameElement | null>(null);
 
   const audioSource = useMemo(
-    () => parseAudioSource(event.themeConfig?.musicUrl),
-    [event.themeConfig?.musicUrl]
+    () => parseAudioSource(!isClassicPlan ? event.themeConfig?.musicUrl : undefined),
+    [event.themeConfig?.musicUrl, isClassicPlan]
   );
 
   // Visor Lightbox para fotos de alta resolución
@@ -328,11 +332,13 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
         </div>
       )}
 
-      {/* Partículas ambientales de pétalos / brillos dorados */}
-      <AmbientParticles
-        theme={event.theme}
-        effect={event.themeConfig?.particleEffect || 'AUTO'}
-      />
+      {/* Partículas ambientales de pétalos / brillos dorados (Solo Premium y VIP) */}
+      {!isClassicPlan && (
+        <AmbientParticles
+          theme={event.theme}
+          effect={event.themeConfig?.particleEffect || 'AUTO'}
+        />
+      )}
 
       {/* Visor Lightbox para fotos de alta resolución */}
       <PhotoLightboxModal
@@ -342,8 +348,8 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
         onClose={() => setLightboxOpen(false)}
       />
 
-      {/* Sobre 3D Interactivo con Sello de Cera (Wax Seal) */}
-      {!envelopeOpen && (
+      {/* Sobre 3D Interactivo con Sello de Cera (Wax Seal) - Solo Premium y VIP */}
+      {!envelopeOpen && !isClassicPlan && (
         <WaxSealEnvelope
           partnerOneName={event.partnerOneName}
           partnerTwoName={event.partnerTwoName}
@@ -359,8 +365,8 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
         />
       )}
 
-      {/* Control flotante de música estilo joya/vinilo */}
-      {envelopeOpen && sections.heroMusic && audioSource.type !== 'none' && (
+      {/* Control flotante de música estilo joya/vinilo (Solo Premium y VIP) */}
+      {envelopeOpen && !isClassicPlan && sections.heroMusic && audioSource.type !== 'none' && (
         <FloatingAudioPlayer
           playing={playingMusic}
           onToggle={toggleMusic}
@@ -506,8 +512,8 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
           </section>
         )}
 
-        {/* HISTORIA Y GALERÍA EDITORIAL */}
-        {sections.storyGallery && (
+        {/* HISTORIA Y GALERÍA EDITORIAL (Solo Premium y VIP) */}
+        {sections.storyGallery && !isClassicPlan && (
           <section
             className={`rounded-3xl border ${theme.borderClass} ${theme.surfaceBg} p-6 sm:p-10 shadow-lg backdrop-blur-sm ${theme.cardBorderGlow}`}
           >
@@ -637,11 +643,15 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
                   </a>
                   <a
                     href={buildIcsDownloadUrl(event.slug)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition border ${theme.borderClass} ${theme.surfaceMutedBg} hover:opacity-80`}
-                    title="Descargar archivo para Apple Calendar / Outlook"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      downloadIcsLocally(event, 'ceremony');
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition border ${theme.borderClass} ${theme.surfaceMutedBg} hover:opacity-80 cursor-pointer`}
+                    title="Descargar archivo .ics para Apple Calendar / Outlook"
                   >
                     <Calendar className="h-3.5 w-3.5 text-stone-400" />
-                    Apple / .ics
+                    Agendar .ICS
                   </a>
                 </div>
               </div>
@@ -687,11 +697,15 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
                   </a>
                   <a
                     href={buildIcsDownloadUrl(event.slug)}
-                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition border ${theme.borderClass} ${theme.surfaceMutedBg} hover:opacity-80`}
-                    title="Descargar archivo para Apple Calendar / Outlook"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      downloadIcsLocally(event, 'reception');
+                    }}
+                    className={`inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-wider transition border ${theme.borderClass} ${theme.surfaceMutedBg} hover:opacity-80 cursor-pointer`}
+                    title="Descargar archivo .ics para Apple Calendar / Outlook"
                   >
                     <Calendar className="h-3.5 w-3.5 text-stone-400" />
-                    Apple / .ics
+                    Agendar .ICS
                   </a>
                 </div>
               </div>
@@ -708,14 +722,16 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
               {content.dressCodeEyebrow || 'Vestimenta'}
             </p>
             <h2 className="font-serif text-3xl sm:text-4xl font-light mt-1 text-stone-900 dark:text-[#f7f5f0]">
-              {content.dressCodeTitle || 'Rigurosa Etiqueta'}
+              {content.dressCodeTitle || 'Etiqueta Formal'}
             </h2>
             {content.dressCodeNote && (
               <p className={`text-sm ${theme.textMuted} mt-3 max-w-lg mx-auto font-sans font-light`}>
                 {content.dressCodeNote}
               </p>
             )}
-            {content.dressCodeShowPalette !== false && content.dressCodePalette && content.dressCodePalette.length > 0 && (
+            {(content.dressCodeShowPalette ?? event.themeConfig?.showDressCodePalette ?? true) &&
+              content.dressCodePalette &&
+              content.dressCodePalette.length > 0 && (
               <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
                 {content.dressCodePalette.map((color, idx) => (
                   <div key={idx} className="flex flex-col items-center gap-1.5">
@@ -813,7 +829,14 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
             <form onSubmit={handleRsvpSubmit} className="max-w-xl mx-auto space-y-6">
               <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-stone-400 uppercase tracking-wider">Invitación para</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-stone-400 uppercase tracking-wider">Invitación para</span>
+                    {!isClassicPlan && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-[#b08d57] to-[#8d2b3d] px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-xs">
+                        ★ Pase Personal
+                      </span>
+                    )}
+                  </div>
                   <p className="font-serif text-lg font-medium">{group.groupName}</p>
                 </div>
                 <span className="text-xs px-3 py-1 rounded-full bg-[#b08d57]/20 text-[#b08d57] font-semibold">
@@ -902,8 +925,8 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
           )}
         </section>
 
-        {/* ÁLBUM QR DE FOTOS & VIDEOS */}
-        {sections.photoWall && (
+        {/* ÁLBUM QR DE FOTOS & VIDEOS (Solo Premium y VIP) */}
+        {sections.photoWall && !isClassicPlan && (
           <section
             className={`rounded-3xl border ${theme.borderClass} ${theme.surfaceBg} p-6 sm:p-10 shadow-lg backdrop-blur-sm ${theme.cardBorderGlow}`}
           >
@@ -1038,8 +1061,9 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
           </section>
         )}
 
-        {/* PLAYLIST OFICIAL DE SPOTIFY DE LA BODA */}
+        {/* PLAYLIST OFICIAL DE SPOTIFY DE LA BODA (Solo Premium y VIP) */}
         {sections.spotifyPlaylist !== false &&
+          !isClassicPlan &&
           (event.themeConfig?.spotifyPlaylistUrl || content.spotifyPlaylistUrl) && (
             <section
               id="playlist"
@@ -1110,8 +1134,8 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
             </section>
           )}
 
-        {/* MURO DE BUENOS DESEOS */}
-        {sections.wishesWall && (
+        {/* MURO DE BUENOS DESEOS (Solo Premium y VIP) */}
+        {sections.wishesWall && !isClassicPlan && (
           <section
             id="wishes"
             className={`rounded-3xl border ${theme.borderClass} ${theme.surfaceBg} p-6 sm:p-10 shadow-lg backdrop-blur-sm ${theme.cardBorderGlow}`}

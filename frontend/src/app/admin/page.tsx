@@ -29,6 +29,7 @@ import {
   X,
 } from 'lucide-react';
 import { API_BASE_URL, apiFetch, getStoredToken, setStoredToken } from '@/lib/api';
+import { exportEventSummaryPdf, exportWishesPdf } from '@/lib/pdfExport';
 import { AdminCustomizerTab } from '@/components/admin/AdminCustomizerTab';
 import { AdminDispatchTab } from '@/components/admin/AdminDispatchTab';
 import { DriveConfigModal } from '@/components/admin/DriveConfigModal';
@@ -939,6 +940,46 @@ export default function AdminDashboardPage() {
             {/* TAB 1: ESTADÍSTICAS */}
             {activeTab === 'STATS' && stats && (
               <div className="space-y-6">
+                {selectedEvent && (
+                  <div className="flex flex-wrap items-center justify-between gap-3 bg-white rounded-2xl border border-stone-200 p-4">
+                    <div>
+                      <h3 className="font-semibold text-sm text-stone-900">Resumen del Evento en PDF</h3>
+                      <p className="text-xs text-stone-500">
+                        Itinerario, confirmaciones, lista de invitados y buenos deseos en un documento listo para imprimir o compartir.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            exportEventSummaryPdf(selectedEvent, stats, guests, wishes);
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : 'No se pudo generar el PDF');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3.5 py-2 text-xs font-semibold text-white hover:bg-stone-800"
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Descargar Resumen (PDF)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            exportWishesPdf(selectedEvent, wishes);
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : 'No se pudo generar el PDF');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 px-3.5 py-2 text-xs font-semibold text-stone-800 hover:bg-stone-50"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Libro de Deseos (PDF)
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
                   {[
                     { label: 'Cupos Totales', value: stats.totalAllocatedSlots, color: 'text-stone-900' },
@@ -1435,7 +1476,25 @@ export default function AdminDashboardPage() {
                 </div>
 
                 <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-3">
-                  <h3 className="font-semibold text-sm">Muro de Buenos Deseos ({wishes.length})</h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="font-semibold text-sm">Muro de Buenos Deseos ({wishes.length})</h3>
+                    {selectedEvent && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          try {
+                            exportWishesPdf(selectedEvent, wishes);
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : 'No se pudo generar el PDF');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1.5 rounded-xl bg-stone-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-stone-800"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        Descargar Deseos (PDF)
+                      </button>
+                    )}
+                  </div>
                   {wishes.map((w) => (
                     <div
                       key={w.id}

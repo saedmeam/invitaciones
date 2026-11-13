@@ -258,6 +258,35 @@ export function AdminOrganizationsTab({
           </label>
         </div>
 
+        {/* Tramos rápidos de Suscripción Mensual por Bodas Activas (Todas las funciones Premium incluidas) */}
+        <div className="rounded-xl bg-amber-50/60 border border-amber-200/70 px-3.5 py-2.5 flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] text-amber-950">
+            <strong>Planes Planners (100% Funciones Premium • Vigencia 6 meses/boda):</strong> Selecciona el tramo de bodas activas simultáneas:
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {[
+              { label: '≤ 2 Bodas ($59/mes o $55 c/u)', max: 2 },
+              { label: '≤ 5 Bodas ($99/mes o $45 c/u)', max: 5 },
+              { label: '≤ 10 Bodas ($159/mes o $39 c/u)', max: 10 },
+              { label: '≤ 20 Bodas ($229/mes o $35 c/u)', max: 20 },
+              { label: 'Ilimitadas ($299/mes)', max: 9999 },
+            ].map((tier) => (
+              <button
+                key={tier.max}
+                type="button"
+                onClick={() => setForm((p) => ({ ...p, type: 'PLANNER', maxEvents: tier.max }))}
+                className={`rounded-lg px-2.5 py-1 text-[10px] font-semibold transition-all border ${
+                  form.maxEvents === tier.max
+                    ? 'bg-stone-900 text-white border-stone-900 shadow-xs'
+                    : 'bg-white text-stone-700 border-stone-300 hover:border-amber-600'
+                }`}
+              >
+                {tier.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="grid sm:grid-cols-4 gap-3 pt-2 border-t border-stone-100 items-end">
           <label className="space-y-1">
             <span className="block text-[11px] font-medium text-stone-600">
