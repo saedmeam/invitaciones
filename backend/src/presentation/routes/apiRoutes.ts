@@ -1,7 +1,9 @@
 import fs from 'fs';
+import path from 'path';
 import { Router, Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import QRCode from 'qrcode';
 import { z } from 'zod';
 import { RsvpDomainService } from '../../domain/services/RsvpDomainService';
 import { env } from '../../infrastructure/config/env';
@@ -23,6 +25,34 @@ export function createApiRouter(container: AppContainer): Router {
   const pinUploadLimiter = createRateLimiter(30, 60 * 1000);
 
   fs.mkdirSync(env.tempUploadDir, { recursive: true });
+  const assetsDir = path.resolve(process.cwd(), 'uploads', 'assets');
+  fs.mkdirSync(assetsDir, { recursive: true });
+
+  const assetStorage = multer.diskStorage({
+    destination: (_req, _file, cb) => cb(null, assetsDir),
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname).toLowerCase() || '.jpg';
+      const cleanBase = path
+        .basename(file.originalname, ext)
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .slice(0, 30);
+      const uniqueName = `asset-${Date.now()}-${cleanBase}${ext}`;
+      cb(null, uniqueName);
+    },
+  });
+
+  const assetUpload = multer({
+    storage: assetStorage,
+    limits: { fileSize: 25 * 1024 * 1024 }, // hasta 25MB por imagen
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Solo se permiten archivos de imagen'));
+      }
+    },
+  });
+
   const mediaUpload = multer({
     dest: env.tempUploadDir,
     limits: { fileSize: env.maxUploadMb * 1024 * 1024 },
@@ -142,19 +172,32 @@ export function createApiRouter(container: AppContainer): Router {
     })
   );
 
+  function sanitizePublicEvent(event: any) {
+    if (!event) return null;
+    const {
+      googleRefreshToken,
+      googleClientSecret,
+      googleClientId,
+      smtpPass,
+      smtpUser,
+      smtpHost,
+      smtpPort,
+      ...safe
+    } = event;
+    return {
+      ...safe,
+      photoPin: event.photoPin ? '***' : '',
+      requiresPhotoPin: Boolean(event.photoPin && event.photoPin.trim()),
+    };
+  }
+
   // Public Invitation & Event
   router.get(
     '/public/featured',
     asyncHandler(async (_req, res) => {
       const event = await container.eventUseCases.getFeaturedPublic();
       res.json({
-        event: event
-          ? {
-              ...event,
-              photoPin: undefined,
-              requiresPhotoPin: Boolean(event.photoPin && event.photoPin.trim()),
-            }
-          : null,
+        event: event ? sanitizePublicEvent(event) : null,
       });
     })
   );
@@ -164,11 +207,7 @@ export function createApiRouter(container: AppContainer): Router {
     asyncHandler(async (req, res) => {
       const event = await container.eventUseCases.getPublicBySlug(String(req.params.slug));
       res.json({
-        event: {
-          ...event,
-          photoPin: event.photoPin ? '***' : '',
-          requiresPhotoPin: Boolean(event.photoPin && event.photoPin.trim()),
-        },
+        event: sanitizePublicEvent(event),
       });
     })
   );
@@ -189,11 +228,7 @@ export function createApiRouter(container: AppContainer): Router {
     asyncHandler(async (req, res) => {
       const data = await container.rsvpUseCases.getByTokenAndTrackView(String(req.params.token));
       res.json({
-        event: {
-          ...data.event,
-          photoPin: undefined,
-          requiresPhotoPin: Boolean(data.event.photoPin && data.event.photoPin.trim()),
-        },
+        event: sanitizePublicEvent(data.event),
         group: data.group,
       });
     })
@@ -247,6 +282,45 @@ export function createApiRouter(container: AppContainer): Router {
   );
 
   // Public Media QR Upload & Gallery
+  router.get(
+    '/public/events/:slug/photo-qr',
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.getPublicBySlug(String(req.params.slug));
+      const resolvedPhotosUrl =
+        event.photosAlbumUrl?.trim() ||
+        (event.photosAlbumId?.trim().startsWith('http') ? event.photosAlbumId.trim() : null);
+
+      const resolvedDriveUrl = event.driveFolderUrl?.trim() || null;
+
+      const targetUrl =
+        resolvedPhotosUrl ||
+        resolvedDriveUrl ||
+        `${env.frontendUrl}/e/${event.slug}/fotos`;
+
+      const qrDataUrl = await QRCode.toDataURL(targetUrl, {
+        width: 600,
+        margin: 2,
+        color: {
+          dark: '#1c1917',
+          light: '#ffffff',
+        },
+      });
+
+      res.json({
+        targetUrl,
+        destinationType: resolvedPhotosUrl
+          ? 'GOOGLE_PHOTOS'
+          : resolvedDriveUrl
+            ? 'GOOGLE_DRIVE'
+            : 'WEB_ALBUM',
+        qrDataUrl,
+        slug: event.slug,
+        photosAlbumUrl: resolvedPhotosUrl,
+        driveFolderUrl: resolvedDriveUrl,
+      });
+    })
+  );
+
   router.get(
     '/public/events/:slug/media',
     asyncHandler(async (req, res) => {
@@ -318,11 +392,16 @@ export function createApiRouter(container: AppContainer): Router {
         String(req.params.eventId),
         req.user!
       );
+      const eventCreds = {
+        clientId: event.googleClientId,
+        clientSecret: event.googleClientSecret,
+        refreshToken: event.googleRefreshToken,
+      };
       const state = jwt.sign({ eventId: event.id }, container.jwtSecret, { expiresIn: '15m' });
-      const url = container.driveProvider.getAuthUrl(state);
+      const url = container.driveProvider.getAuthUrl(state, eventCreds);
       res.json({
         url,
-        hasOAuthApp: container.driveProvider.hasOAuthApp(),
+        hasOAuthApp: container.driveProvider.hasOAuthApp(eventCreds),
         googleAccountEmail: event.googleAccountEmail || null,
         googlePerEventConnected: Boolean(event.googleRefreshToken),
       });
@@ -350,12 +429,21 @@ export function createApiRouter(container: AppContainer): Router {
       }
 
       let targetEventId: string | null = null;
+      let eventCreds: any = null;
       const rawState = req.query.state ? String(req.query.state) : '';
       if (rawState) {
         try {
           const decoded = jwt.verify(rawState, container.jwtSecret) as { eventId?: string };
           if (decoded.eventId) {
             targetEventId = decoded.eventId;
+            const ev = await container.eventRepo.findById(targetEventId);
+            if (ev) {
+              eventCreds = {
+                clientId: ev.googleClientId,
+                clientSecret: ev.googleClientSecret,
+                refreshToken: ev.googleRefreshToken,
+              };
+            }
           }
         } catch {
           throw new AppError('Estado OAuth inválido o expirado', 400, 'INVALID_OAUTH_STATE');
@@ -364,7 +452,8 @@ export function createApiRouter(container: AppContainer): Router {
 
       const { refreshToken, email } = await container.driveProvider.exchangeCodeForTokens(
         code,
-        !targetEventId
+        !targetEventId,
+        eventCreds
       );
 
       if (targetEventId && refreshToken) {
@@ -385,7 +474,7 @@ export function createApiRouter(container: AppContainer): Router {
               ? '<p style="color:#b91c1c;">Google no devolvió un refresh_token nuevo. Revoca el acceso previo en myaccount.google.com/permissions y vuelve a autorizar.</p>'
               : targetEventId
                 ? '<p style="color:#57534e;">Las fotos y archivos de esta boda se guardarán automáticamente en esta cuenta. Ya puedes cerrar esta ventana.</p>'
-                : `<p>Copia este <strong>GOOGLE_REFRESH_TOKEN</strong> en <code>backend/.env</code>:</p><pre style="background:#f5f5f4;padding:12px;border-radius:8px;overflow:auto;text-align:left;">${refreshToken}</pre>`
+                : `<p style="color:#57534e;">Cuenta autorizada exitosamente.</p>`
           }
           <script>
             if (window.opener) {
@@ -524,13 +613,17 @@ export function createApiRouter(container: AppContainer): Router {
         receptionTime: z.string().optional(),
         receptionAddress: z.string().optional(),
         receptionMapUrl: z.string().optional(),
-        theme: z.enum(['ROMANTIC_EDITORIAL', 'BOTANICAL_GARDEN', 'CLASSIC_NOCTURNE']).optional(),
+        theme: z.string().optional(),
         themeConfig: z.record(z.unknown()).optional(),
         sectionsConfig: z.record(z.boolean()).optional(),
         contentConfig: z.record(z.unknown()).optional(),
         driveFolderId: z.string().nullable().optional(),
+        driveFolderUrl: z.string().nullable().optional(),
         photosAlbumId: z.string().nullable().optional(),
-        mediaProvider: z.enum(['GOOGLE_PHOTOS', 'GOOGLE_DRIVE', 'HYBRID']).optional(),
+        photosAlbumUrl: z.string().nullable().optional(),
+        mediaProvider: z.enum(['GOOGLE_PHOTOS', 'GOOGLE_DRIVE', 'HYBRID', 'LOCAL_FALLBACK']).optional(),
+        googleClientId: z.string().nullable().optional(),
+        googleClientSecret: z.string().nullable().optional(),
         photoPin: z.string().nullable().optional(),
         isPrimary: z.boolean().optional(),
         organizationId: z.string().nullable().optional(),
@@ -572,6 +665,40 @@ export function createApiRouter(container: AppContainer): Router {
     asyncHandler(async (req, res) => {
       await container.eventUseCases.remove(String(req.params.eventId), req.user!);
       res.status(204).send();
+    })
+  );
+
+  // Subida de imágenes y assets para configuración de evento (portada, galería prenupcial, etc.)
+  router.post(
+    '/events/:eventId/upload-asset',
+    requireAuth,
+    assetUpload.array('files', 20),
+    asyncHandler(async (req, res) => {
+      // Verificar permisos sobre el evento
+      await container.eventUseCases.getByIdForActor(String(req.params.eventId), req.user!);
+
+      const files =
+        (req.files as Express.Multer.File[]) ||
+        (req.file ? [req.file as Express.Multer.File] : []);
+
+      if (!files || files.length === 0) {
+        throw new AppError('No se recibió ningún archivo de imagen válido', 400, 'NO_FILES_UPLOADED');
+      }
+
+      const host = req.get('host') || 'localhost:4006';
+      const protocol = req.protocol || 'http';
+      const baseUrl = `${protocol}://${host}`;
+
+      const urls = files.map((f) => `/uploads/assets/${f.filename}`);
+      const fullUrls = files.map((f) => `${baseUrl}/uploads/assets/${f.filename}`);
+
+      res.status(201).json({
+        urls,
+        fullUrls,
+        url: urls[0],
+        fullUrl: fullUrls[0],
+        count: urls.length,
+      });
     })
   );
 
@@ -1004,6 +1131,165 @@ export function createApiRouter(container: AppContainer): Router {
       }
 
       res.json({ ok: true, message: `Correo de prueba enviado a ${testEmail}` });
+    })
+  );
+
+  // Admin: Configuración Google Drive & Photos y Prueba en Vivo
+  router.get(
+    '/events/:eventId/drive-config',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const event = await container.eventUseCases.getByIdForActor(
+        String(req.params.eventId),
+        req.user!
+      );
+      const eventCreds = {
+        clientId: event.googleClientId,
+        clientSecret: event.googleClientSecret,
+        refreshToken: event.googleRefreshToken,
+      };
+      const isCustomConnected = Boolean(event.googleRefreshToken);
+      const isGlobalConfigured = container.driveProvider.isConfigured(null);
+
+      res.json({
+        drive: {
+          mediaProvider: event.mediaProvider,
+          driveFolderId: event.driveFolderId || null,
+          driveFolderUrl: event.driveFolderUrl || null,
+          photosAlbumId: event.photosAlbumId || null,
+          photosAlbumUrl: event.photosAlbumUrl || null,
+          photoPin: event.photoPin || null,
+          googleClientId: event.googleClientId || null,
+          hasCustomClientSecret: Boolean(event.googleClientSecret),
+          googleAccountEmail: event.googleAccountEmail || null,
+          isCustomConnected,
+          isGlobalConfigured,
+          isConfigured: isCustomConnected || isGlobalConfigured,
+          usingGlobalFallback: !isCustomConnected && isGlobalConfigured,
+          hasOAuthApp: container.driveProvider.hasOAuthApp(eventCreds),
+        },
+      });
+    })
+  );
+
+  router.put(
+    '/events/:eventId/drive-config',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z.object({
+        mediaProvider: z.enum(['GOOGLE_PHOTOS', 'GOOGLE_DRIVE', 'HYBRID', 'LOCAL_FALLBACK']).optional(),
+        driveFolderId: z.string().trim().max(500).nullable().optional().or(z.literal('')),
+        driveFolderUrl: z.string().trim().max(1000).nullable().optional().or(z.literal('')),
+        photosAlbumId: z.string().trim().max(500).nullable().optional().or(z.literal('')),
+        photosAlbumUrl: z.string().trim().max(1000).nullable().optional().or(z.literal('')),
+        photoPin: z.string().trim().max(20).nullable().optional().or(z.literal('')),
+        googleClientId: z.string().trim().max(500).nullable().optional().or(z.literal('')),
+        googleClientSecret: z.string().trim().max(500).nullable().optional().or(z.literal('')),
+      });
+      const body = schema.parse(req.body);
+
+      const updated = await container.eventUseCases.update(
+        String(req.params.eventId),
+        req.user!,
+        {
+          mediaProvider: body.mediaProvider ? (body.mediaProvider === 'LOCAL_FALLBACK' ? 'HYBRID' : body.mediaProvider as any) : undefined,
+          driveFolderId: body.driveFolderId !== undefined ? (body.driveFolderId === '' ? null : body.driveFolderId) : undefined,
+          driveFolderUrl: body.driveFolderUrl !== undefined ? (body.driveFolderUrl === '' ? null : body.driveFolderUrl) : undefined,
+          photosAlbumId: body.photosAlbumId !== undefined ? (body.photosAlbumId === '' ? null : body.photosAlbumId) : undefined,
+          photosAlbumUrl: body.photosAlbumUrl !== undefined ? (body.photosAlbumUrl === '' ? null : body.photosAlbumUrl) : undefined,
+          photoPin: body.photoPin !== undefined ? (body.photoPin === '' ? null : body.photoPin) : undefined,
+          googleClientId: body.googleClientId !== undefined ? (body.googleClientId === '' ? null : body.googleClientId) : undefined,
+          googleClientSecret: body.googleClientSecret !== undefined ? (body.googleClientSecret === '' ? null : body.googleClientSecret) : undefined,
+        }
+      );
+
+      const eventCreds = {
+        clientId: updated.googleClientId,
+        clientSecret: updated.googleClientSecret,
+        refreshToken: updated.googleRefreshToken,
+      };
+      const isCustomConnected = Boolean(updated.googleRefreshToken);
+      const isGlobalConfigured = container.driveProvider.isConfigured(null);
+
+      res.json({
+        drive: {
+          mediaProvider: updated.mediaProvider,
+          driveFolderId: updated.driveFolderId || null,
+          driveFolderUrl: updated.driveFolderUrl || null,
+          photosAlbumId: updated.photosAlbumId || null,
+          photosAlbumUrl: updated.photosAlbumUrl || null,
+          photoPin: updated.photoPin || null,
+          googleClientId: updated.googleClientId || null,
+          hasCustomClientSecret: Boolean(updated.googleClientSecret),
+          googleAccountEmail: updated.googleAccountEmail || null,
+          isCustomConnected,
+          isGlobalConfigured,
+          isConfigured: isCustomConnected || isGlobalConfigured,
+          usingGlobalFallback: !isCustomConnected && isGlobalConfigured,
+          hasOAuthApp: container.driveProvider.hasOAuthApp(eventCreds),
+        },
+      });
+    })
+  );
+
+  router.post(
+    '/events/:eventId/drive-config/test',
+    requireAuth,
+    asyncHandler(async (req, res) => {
+      const schema = z
+        .object({
+          folderId: z.string().trim().max(500).optional(),
+          mediaProvider: z.enum(['GOOGLE_PHOTOS', 'GOOGLE_DRIVE', 'HYBRID', 'LOCAL_FALLBACK']).optional(),
+        })
+        .optional();
+      const body = schema ? schema.parse(req.body) : {};
+
+      const event = await container.eventUseCases.getByIdForActor(
+        String(req.params.eventId),
+        req.user!
+      );
+
+      const eventCreds = {
+        clientId: event.googleClientId,
+        clientSecret: event.googleClientSecret,
+        refreshToken: event.googleRefreshToken,
+      };
+
+      const isConfigured = container.driveProvider.isConfigured(event.googleRefreshToken, eventCreds);
+      if (!isConfigured) {
+        throw new AppError(
+          'No hay cuenta de Google Drive / Photos vinculada a este evento ni configurada en el servidor. Vincula tu cuenta con el botón "Vincular con Google".',
+          400,
+          'DRIVE_NOT_CONFIGURED'
+        );
+      }
+
+      const testResult = await container.driveProvider.testConnection({
+        refreshToken: event.googleRefreshToken,
+        folderId: body?.folderId !== undefined ? body.folderId : (event.driveFolderId || event.driveFolderUrl),
+        mediaProvider: body?.mediaProvider && body.mediaProvider !== 'LOCAL_FALLBACK' ? body.mediaProvider : event.mediaProvider,
+        credentials: eventCreds,
+      });
+
+      if (!testResult.ok) {
+        throw new AppError(
+          testResult.error || 'Fallo en la prueba de conexión con Google Drive',
+          testResult.errorCode === 'DRIVE_FOLDER_NOT_FOUND' ? 404 : 400,
+          testResult.errorCode || 'DRIVE_TEST_FAILED'
+        );
+      }
+
+      res.json({
+        ok: true,
+        message: 'Conexión con Google verificada exitosamente',
+        details: {
+          accountEmail: testResult.email || event.googleAccountEmail || null,
+          mediaProvider: body?.mediaProvider || event.mediaProvider,
+          driveAccessible: true,
+          folderVerified: Boolean(testResult.folderName),
+          folderName: testResult.folderName || null,
+        },
+      });
     })
   );
 

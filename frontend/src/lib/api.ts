@@ -58,3 +58,42 @@ export async function apiFetch<T>(
   }
   return data as T;
 }
+
+export function resolveAssetUrl(url?: string | null): string {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:')
+  ) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('/')) {
+    return `${API_BASE_URL}${trimmed}`;
+  }
+  return `${API_BASE_URL}/${trimmed}`;
+}
+
+export async function uploadEventAsset(
+  eventId: string,
+  fileOrFiles: File | File[]
+): Promise<{ urls: string[]; fullUrls: string[]; url: string; fullUrl: string }> {
+  const formData = new FormData();
+  if (Array.isArray(fileOrFiles)) {
+    for (const f of fileOrFiles) {
+      formData.append('files', f);
+    }
+  } else {
+    formData.append('files', fileOrFiles);
+  }
+
+  return apiFetch<{ urls: string[]; fullUrls: string[]; url: string; fullUrl: string }>(
+    `/api/events/${eventId}/upload-asset`,
+    {
+      method: 'POST',
+      body: formData,
+      auth: true,
+    }
+  );
+}

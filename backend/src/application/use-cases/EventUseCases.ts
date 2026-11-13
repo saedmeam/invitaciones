@@ -15,6 +15,7 @@ import {
   ensureCanManageEventsOrCouples,
   ensureEventAccess,
 } from '../helpers/AccessControlHelper';
+import { extractGoogleDriveFolderId } from '../../infrastructure/providers/GoogleDriveStorageProvider';
 
 export interface CreateEventDto {
   slug: string;
@@ -36,8 +37,12 @@ export interface CreateEventDto {
   sectionsConfig?: Partial<EventSectionsConfig>;
   contentConfig?: EventContentConfig;
   driveFolderId?: string | null;
+  driveFolderUrl?: string | null;
   photosAlbumId?: string | null;
+  photosAlbumUrl?: string | null;
   mediaProvider?: MediaProviderType;
+  googleClientId?: string | null;
+  googleClientSecret?: string | null;
   photoPin?: string | null;
   isPrimary?: boolean;
   organizationId?: string | null;
@@ -131,6 +136,10 @@ export class EventUseCases {
       ...(dto.sectionsConfig || {}),
     };
 
+    const rawDrive = dto.driveFolderId || dto.driveFolderUrl;
+    const cleanDriveId = rawDrive ? (extractGoogleDriveFolderId(rawDrive) || rawDrive.trim()) : null;
+    const driveFolderUrl = dto.driveFolderUrl || (dto.driveFolderId && dto.driveFolderId.includes('http') ? dto.driveFolderId.trim() : null);
+
     const created = await this.eventRepo.create({
       slug: cleanSlug,
       title: dto.title.trim(),
@@ -150,9 +159,13 @@ export class EventUseCases {
       themeConfig: JSON.stringify(dto.themeConfig || {}),
       sectionsConfig: JSON.stringify(sections),
       contentConfig: JSON.stringify(dto.contentConfig || {}),
-      driveFolderId: dto.driveFolderId || null,
+      driveFolderId: cleanDriveId,
+      driveFolderUrl,
       photosAlbumId: dto.photosAlbumId || null,
+      photosAlbumUrl: dto.photosAlbumUrl || null,
       mediaProvider: dto.mediaProvider || 'HYBRID',
+      googleClientId: dto.googleClientId || null,
+      googleClientSecret: dto.googleClientSecret || null,
       photoPin: dto.photoPin || null,
       isPrimary: actor.role === 'SUPERADMIN' ? Boolean(dto.isPrimary) : false,
       organizationId: targetOrgId,
@@ -198,6 +211,21 @@ export class EventUseCases {
       ? { ...current.contentConfig, ...dto.contentConfig }
       : undefined;
 
+    const rawDrive = dto.driveFolderId !== undefined ? dto.driveFolderId : dto.driveFolderUrl;
+    const cleanDriveId = rawDrive !== undefined
+      ? (rawDrive ? (extractGoogleDriveFolderId(rawDrive) || rawDrive.trim()) : null)
+      : undefined;
+    const driveFolderUrl = dto.driveFolderUrl !== undefined
+      ? dto.driveFolderUrl
+      : (dto.driveFolderId && dto.driveFolderId.includes('http') ? dto.driveFolderId.trim() : undefined);
+
+    const photosAlbumUrl = dto.photosAlbumUrl !== undefined
+      ? dto.photosAlbumUrl
+      : (dto.photosAlbumId && dto.photosAlbumId.includes('http') ? dto.photosAlbumId.trim() : undefined);
+    const photosAlbumId = dto.photosAlbumId !== undefined
+      ? (dto.photosAlbumId && dto.photosAlbumId.includes('http') ? null : dto.photosAlbumId)
+      : undefined;
+
     return this.eventRepo.update(eventId, {
       slug: nextSlug,
       title: dto.title?.trim(),
@@ -222,9 +250,13 @@ export class EventUseCases {
       themeConfig: mergedThemeConfig ? JSON.stringify(mergedThemeConfig) : undefined,
       sectionsConfig: mergedSections ? JSON.stringify(mergedSections) : undefined,
       contentConfig: mergedContent ? JSON.stringify(mergedContent) : undefined,
-      driveFolderId: dto.driveFolderId,
-      photosAlbumId: dto.photosAlbumId,
+      driveFolderId: cleanDriveId,
+      driveFolderUrl,
+      photosAlbumId,
+      photosAlbumUrl,
       mediaProvider: dto.mediaProvider,
+      googleClientId: dto.googleClientId,
+      googleClientSecret: dto.googleClientSecret,
       googleAccountEmail: dto.googleAccountEmail,
       googleRefreshToken: dto.googleRefreshToken,
       smtpHost: dto.smtpHost,

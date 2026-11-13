@@ -62,10 +62,14 @@ model Event {
   sectionsConfig   String            @default("{}")
   contentConfig    String            @default("{}")
   driveFolderId      String?
+  driveFolderUrl     String?
   photosAlbumId      String?
+  photosAlbumUrl     String?
   mediaProvider      String            @default("HYBRID")
   googleAccountEmail String?
   googleRefreshToken String?
+  googleClientId     String?
+  googleClientSecret String?
   smtpHost           String?
   smtpPort           Int?
   smtpSecure         Boolean?          @default(true)

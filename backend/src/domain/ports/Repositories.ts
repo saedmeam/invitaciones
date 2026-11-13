@@ -102,8 +102,12 @@ export interface CreateEventInput {
   sectionsConfig?: string;
   contentConfig?: string;
   driveFolderId?: string | null;
+  driveFolderUrl?: string | null;
   photosAlbumId?: string | null;
+  photosAlbumUrl?: string | null;
   mediaProvider?: string;
+  googleClientId?: string | null;
+  googleClientSecret?: string | null;
   photoPin?: string | null;
   isPrimary?: boolean;
   organizationId?: string | null;

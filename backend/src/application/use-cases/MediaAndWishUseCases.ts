@@ -25,7 +25,11 @@ export class MediaAndWishUseCases {
 
   async generatePhotoQr(eventId: string, actor: AuthActor) {
     const event = await ensureEventAccess(this.eventRepo, eventId, actor);
-    const uploadUrl = `${this.frontendUrl}/e/${event.slug}/fotos`;
+    const uploadUrl =
+      event.photosAlbumUrl?.trim() ||
+      (event.photosAlbumId?.trim().startsWith('http') ? event.photosAlbumId.trim() : null) ||
+      event.driveFolderUrl?.trim() ||
+      `${this.frontendUrl}/e/${event.slug}/fotos`;
     const qrDataUrl = await QRCode.toDataURL(uploadUrl, {
       width: 512,
       margin: 2,
@@ -33,16 +37,24 @@ export class MediaAndWishUseCases {
     });
     const qrSvg = await QRCode.toString(uploadUrl, { type: 'svg', margin: 2 });
 
+    const eventCreds = {
+      clientId: event.googleClientId,
+      clientSecret: event.googleClientSecret,
+      refreshToken: event.googleRefreshToken,
+    };
+
     return {
       uploadUrl,
       qrDataUrl,
       qrSvg,
-      driveConfigured: this.driveProvider.isConfigured(event.googleRefreshToken),
-      googleOAuthAppConfigured: this.driveProvider.hasOAuthApp(),
+      driveConfigured: this.driveProvider.isConfigured(event.googleRefreshToken, eventCreds),
+      googleOAuthAppConfigured: this.driveProvider.hasOAuthApp(eventCreds),
       googleAccountEmail: event.googleAccountEmail || null,
       googlePerEventConnected: Boolean(event.googleRefreshToken),
       driveFolderId: event.driveFolderId,
+      driveFolderUrl: event.driveFolderUrl || null,
       photosAlbumId: event.photosAlbumId,
+      photosAlbumUrl: event.photosAlbumUrl || null,
       mediaProvider: event.mediaProvider,
     };
   }
@@ -96,6 +108,12 @@ export class MediaAndWishUseCases {
       const safeCaption = params.caption ? this.sanitizeText(params.caption) : undefined;
       const safeUploader = this.sanitizeText(params.uploaderName || 'Invitado');
 
+      const eventCreds = {
+        clientId: event.googleClientId,
+        clientSecret: event.googleClientSecret,
+        refreshToken: event.googleRefreshToken,
+      };
+
       const uploadResult = await this.driveProvider.uploadFile({
         filePath: params.file.path,
         fileName: `${Date.now()}-${params.file.originalname}`,
@@ -106,6 +124,7 @@ export class MediaAndWishUseCases {
         photosAlbumId: event.photosAlbumId,
         albumTitle: `${event.partnerOneName} & ${event.partnerTwoName}`,
         refreshToken: event.googleRefreshToken,
+        credentials: eventCreds,
       });
 
       if (uploadResult.photosAlbumId && uploadResult.photosAlbumId !== event.photosAlbumId) {
@@ -167,6 +186,11 @@ export class MediaAndWishUseCases {
       driveFileId: media.driveFileId,
       localFallbackPath: media.localFallbackPath,
       refreshToken: event.googleRefreshToken,
+      credentials: {
+        clientId: event.googleClientId,
+        clientSecret: event.googleClientSecret,
+        refreshToken: event.googleRefreshToken,
+      },
     });
     await this.mediaRepo.delete(mediaId);
   }
@@ -183,6 +207,13 @@ export class MediaAndWishUseCases {
       photosMediaItemId: media.photosMediaItemId,
       localFallbackPath: media.localFallbackPath,
       refreshToken: event?.googleRefreshToken,
+      credentials: event
+        ? {
+            clientId: event.googleClientId,
+            clientSecret: event.googleClientSecret,
+            refreshToken: event.googleRefreshToken,
+          }
+        : null,
     });
     return { media, stream };
   }

@@ -58,13 +58,17 @@ export function UserEditModal({
   const [saving, setSaving] = useState(false);
 
   const isSuperAdmin = actorRole === 'SUPERADMIN';
-  const effectiveRole = mode === 'create' ? role : user?.role || 'COUPLE';
+  const effectiveRole = mode === 'create' ? (isSuperAdmin ? role : 'COUPLE') : user?.role || 'COUPLE';
   const showOrgSelect =
     (mode === 'create' || mode === 'admin') && isSuperAdmin && effectiveRole !== 'SUPERADMIN';
   const showEventSelect = (mode === 'create' || mode === 'admin') && effectiveRole === 'COUPLE';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isSuperAdmin && effectiveRole !== 'COUPLE') {
+      toast.error('Solo tienes permisos para gestionar cuentas de pareja (COUPLE)');
+      return;
+    }
     if (mode === 'create' && newPassword.trim().length < 6) {
       toast.error('La contraseña debe tener al menos 6 caracteres');
       return;
@@ -200,7 +204,7 @@ export function UserEditModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {mode === 'create' && isSuperAdmin && (
+          {mode === 'create' && isSuperAdmin ? (
             <label className="block space-y-1">
               <span className="text-xs font-medium text-stone-700">Tipo de Usuario (Rol)</span>
               <select
@@ -213,7 +217,14 @@ export function UserEditModal({
                 <option value="SUPERADMIN">Administrador Principal (SUPERADMIN)</option>
               </select>
             </label>
-          )}
+          ) : mode === 'create' && !isSuperAdmin ? (
+            <div className="rounded-xl bg-amber-50/80 border border-amber-200/90 p-3 text-xs text-amber-900">
+              <span className="font-semibold block mb-0.5">Rol: Pareja / Novios (COUPLE)</span>
+              <p className="text-[11px] text-amber-800/90">
+                Como Wedding Planner, tus accesos creados son exclusivos para la pareja de la boda seleccionada.
+              </p>
+            </div>
+          ) : null}
 
           <label className="block space-y-1">
             <span className="text-xs font-medium text-stone-700">Nombre</span>

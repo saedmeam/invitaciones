@@ -1,4 +1,16 @@
-export type EventTheme = 'ROMANTIC_EDITORIAL' | 'BOTANICAL_GARDEN' | 'CLASSIC_NOCTURNE';
+export type EventTheme =
+  | 'ROMANTIC_EDITORIAL'
+  | 'MINIMAL_LUXURY'
+  | 'BOTANICAL_GARDEN'
+  | 'GOLDEN_GLAMOUR'
+  | 'RUSTIC_CHIC'
+  | 'NOCTURNE_ROYAL'
+  | 'CLASSIC_NOCTURNE'
+  | 'BURGUNDY_VELVET'
+  | 'EMERALD_IMPERIAL'
+  | 'LAVENDER_PROVENCE'
+  | 'SAPPHIRE_SERENITY'
+  | 'TERRACOTTA_SUNSET';
 export type MediaProviderType = 'GOOGLE_PHOTOS' | 'GOOGLE_DRIVE' | 'HYBRID';
 
 export interface EventSectionsConfig {
@@ -13,13 +25,32 @@ export interface EventSectionsConfig {
   photoWall: boolean;
 }
 
+export type ParticleEffectType =
+  | 'AUTO'
+  | 'ROSE_PETALS'
+  | 'GOLD_SPARKLES'
+  | 'BOTANICAL_LEAVES'
+  | 'LAVENDER_PETALS'
+  | 'CELESTIAL_SPARKLES'
+  | 'NONE';
+
 export interface EventThemeConfig {
   accentColor?: string;
   musicUrl?: string;
+  spotifyPlaylistUrl?: string;
   coverImageUrl?: string;
   coverSubtitle?: string;
   moderatePhotos?: boolean;
   moderateWishes?: boolean;
+  waxSealMonogram?: string;
+  waxSealColor?: string;
+  coverImageFit?: 'cover' | 'contain' | 'auto';
+  particleEffect?: ParticleEffectType;
+  backgroundClean?: boolean;
+  backgroundImageUrl?: string;
+  backgroundOpacity?: number;
+  backgroundBlur?: number;
+  backgroundFixed?: boolean;
 }
 
 export interface StoryItem {
@@ -58,6 +89,7 @@ export interface EventContentConfig {
   dressCodeEyebrow?: string;
   dressCodeTitle?: string;
   dressCodeNote?: string;
+  dressCodeShowPalette?: boolean;
   dressCodePalette?: string[];
   giftTitle?: string;
   giftDescription?: string;
@@ -94,10 +126,14 @@ export interface EventEntity {
   sectionsConfig: EventSectionsConfig;
   contentConfig: EventContentConfig;
   driveFolderId: string | null;
+  driveFolderUrl?: string | null;
   photosAlbumId: string | null;
+  photosAlbumUrl?: string | null;
   mediaProvider: MediaProviderType;
   googleAccountEmail?: string | null;
   googleRefreshToken?: string | null;
+  googleClientId?: string | null;
+  googleClientSecret?: string | null;
   smtpHost?: string | null;
   smtpPort?: number | null;
   smtpSecure?: boolean | null;

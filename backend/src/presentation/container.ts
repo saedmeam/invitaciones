@@ -27,8 +27,10 @@ import {
   IEmailProvider,
   IWhatsAppProvider,
 } from '../domain/ports/Providers';
+import { IEventRepository } from '../domain/ports/Repositories';
 
 export interface AppContainer {
+  eventRepo: IEventRepository;
   authUseCases: AuthUseCases;
   organizationUseCases: OrganizationUseCases;
   eventUseCases: EventUseCases;
@@ -108,6 +110,7 @@ export function buildContainer(overrides?: {
       driveProvider,
       env.frontendUrl
     ),
+    eventRepo,
     whatsappProvider,
     emailProvider,
     driveProvider,

@@ -52,14 +52,30 @@ export interface DriveUploadResult {
   localFallbackPath: string | null;
 }
 
+export interface EventOAuthCredentials {
+  clientId?: string | null;
+  clientSecret?: string | null;
+  refreshToken?: string | null;
+}
+
+export interface DriveTestResult {
+  ok: boolean;
+  email?: string | null;
+  folderName?: string | null;
+  error?: string;
+  errorCode?: string;
+}
+
 export interface IDriveStorageProvider {
-  hasOAuthApp(): boolean;
-  isConfigured(eventRefreshToken?: string | null): boolean;
-  getAuthUrl(state?: string): string | null;
+  hasOAuthApp(credentials?: EventOAuthCredentials | null): boolean;
+  isConfigured(eventRefreshToken?: string | null, credentials?: EventOAuthCredentials | null): boolean;
+  getAuthUrl(state?: string, credentials?: EventOAuthCredentials | null): string | null;
   exchangeCodeForTokens(
     code: string,
-    persistToGlobalEnv?: boolean
+    persistToGlobalEnv?: boolean,
+    credentials?: EventOAuthCredentials | null
   ): Promise<{ refreshToken: string | null; email: string | null }>;
+  extractFolderId(input?: string | null): string | null;
   uploadFile(params: {
     filePath: string;
     fileName: string;
@@ -70,6 +86,7 @@ export interface IDriveStorageProvider {
     photosAlbumId?: string | null;
     albumTitle?: string;
     refreshToken?: string | null;
+    credentials?: EventOAuthCredentials | null;
   }): Promise<DriveUploadResult>;
   getFileStream(params: {
     storageMode: StorageMode;
@@ -77,11 +94,19 @@ export interface IDriveStorageProvider {
     photosMediaItemId: string | null;
     localFallbackPath: string | null;
     refreshToken?: string | null;
+    credentials?: EventOAuthCredentials | null;
   }): Promise<Readable>;
   deleteFile(params: {
     storageMode: StorageMode;
     driveFileId: string | null;
     localFallbackPath: string | null;
     refreshToken?: string | null;
+    credentials?: EventOAuthCredentials | null;
   }): Promise<void>;
+  testConnection(params: {
+    refreshToken?: string | null;
+    folderId?: string | null;
+    mediaProvider?: MediaProviderType;
+    credentials?: EventOAuthCredentials | null;
+  }): Promise<DriveTestResult>;
 }

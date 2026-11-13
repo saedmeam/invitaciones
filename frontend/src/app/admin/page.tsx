@@ -12,9 +12,11 @@ import {
   ExternalLink,
   FileSpreadsheet,
   FileText,
+  FolderOpen,
   KeyRound,
   LayoutGrid,
   LogOut,
+  Menu,
   MessageCircle,
   Palette,
   Pencil,
@@ -24,10 +26,12 @@ import {
   Trash2,
   Upload,
   Users,
+  X,
 } from 'lucide-react';
 import { API_BASE_URL, apiFetch, getStoredToken, setStoredToken } from '@/lib/api';
 import { AdminCustomizerTab } from '@/components/admin/AdminCustomizerTab';
 import { AdminDispatchTab } from '@/components/admin/AdminDispatchTab';
+import { DriveConfigModal } from '@/components/admin/DriveConfigModal';
 import {
   AdminOrganizationsTab,
   GlobalUserItem,
@@ -68,6 +72,7 @@ export default function AdminDashboardPage() {
   const [orgFilterId, setOrgFilterId] = useState<string>('');
   const [selectedEventId, setSelectedEventId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<AdminTab>('STATS');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [guests, setGuests] = useState<GuestGroup[]>([]);
   const [stats, setStats] = useState<RsvpStats | null>(null);
@@ -82,6 +87,7 @@ export default function AdminDashboardPage() {
     googlePerEventConnected?: boolean;
   } | null>(null);
 
+  const [showDriveModal, setShowDriveModal] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [editingGuest, setEditingGuest] = useState<GuestGroup | null>(null);
@@ -138,9 +144,14 @@ export default function AdminDashboardPage() {
       setCurrentUser(meRes.user);
       setEvents(evRes.events);
       if (evRes.events.length > 0) {
-        setSelectedEventId((prev) =>
-          prev && evRes.events.some((e) => e.id === prev) ? prev : evRes.events[0].id
-        );
+        const storedId = typeof window !== 'undefined' ? localStorage.getItem('invitaciones_selected_event_id') : null;
+        const primaryEvent = evRes.events.find((e) => e.isPrimary);
+        setSelectedEventId((prev) => {
+          if (prev && evRes.events.some((e) => e.id === prev)) return prev;
+          if (storedId && evRes.events.some((e) => e.id === storedId)) return storedId;
+          if (primaryEvent) return primaryEvent.id;
+          return evRes.events[0].id;
+        });
       }
       if (meRes.user.role === 'SUPERADMIN') {
         const [orgRes, usersRes] = await Promise.all([
@@ -456,297 +467,458 @@ export default function AdminDashboardPage() {
     return matchesStatus && matchesSearch;
   });
 
-  return (
-    <div className="min-h-screen bg-stone-100 text-stone-900">
-      {/* Header */}
-      <header className="bg-white border-b border-stone-200 px-6 py-4">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="font-serif text-2xl font-semibold">
+  const navTabs = [
+    ...(isSuperAdmin
+      ? [
+          {
+            id: 'ORGANIZATIONS' as AdminTab,
+            label: 'Empresas & Accesos',
+            icon: Building2,
+          },
+        ]
+      : []),
+    { id: 'STATS' as AdminTab, label: 'Estadísticas & Resumen', icon: BarChart3 },
+    { id: 'GUESTS' as AdminTab, label: 'Invitados & RSVP', icon: Users },
+    { id: 'TABLES' as AdminTab, label: 'Mesas & Salón', icon: LayoutGrid },
+    { id: 'DISPATCH' as AdminTab, label: 'WhatsApp & Gmail', icon: Send },
+    { id: 'CUSTOMIZE' as AdminTab, label: 'Diseño & Secciones', icon: Palette },
+    { id: 'MEDIA' as AdminTab, label: 'Álbum Digital & Deseos', icon: Camera },
+  ];
+
+  const renderSidebarContent = () => (
+    <div className="flex flex-col h-full justify-between gap-4">
+      <div className="space-y-4">
+        {/* Identidad / Branding */}
+        <div className="flex items-center gap-2.5 pb-3 border-b border-stone-200/80">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-900 text-[#b08d57] shadow-xs font-serif font-bold text-base">
+            {isSuperAdmin ? 'SA' : isOrgAdmin ? 'WP' : '♡'}
+          </span>
+          <div className="min-w-0 flex-1">
+            <h1 className="font-serif text-base font-semibold tracking-tight text-stone-900 truncate">
               {isSuperAdmin
                 ? 'Gestor Multi-Empresa'
                 : isOrgAdmin
-                  ? currentUser?.organizationName || 'Mi Agencia'
+                  ? currentUser?.organizationName || 'Agencia Wedding Planner'
                   : 'Mi Boda'}
             </h1>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span
+                className={`text-[9px] uppercase font-mono px-1.5 py-0.5 rounded-md font-semibold border ${
+                  isSuperAdmin
+                    ? 'bg-purple-50 text-purple-800 border-purple-200'
+                    : isOrgAdmin
+                      ? 'bg-amber-50 text-amber-900 border-amber-200'
+                      : 'bg-emerald-50 text-emerald-900 border-emerald-200'
+                }`}
+              >
+                {isSuperAdmin ? 'SuperAdmin' : isOrgAdmin ? 'Wedding Planner' : 'Pareja'}
+              </span>
+              {isOrgAdmin && currentUser?.organizationQuota && (
+                <span className="text-[10px] text-stone-500 font-mono">
+                  {currentUser.organizationQuota.eventsCount}/{currentUser.organizationQuota.maxEvents}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
 
-            {canManageEvents ? (
-              <>
-                {isSuperAdmin && organizations.length > 0 && (
-                  <select
-                    value={orgFilterId}
-                    onChange={(e) => setOrgFilterId(e.target.value)}
-                    className="rounded-xl border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium"
+        {/* Selector de Evento Activo y Empresa */}
+        {canManageEvents && (
+          <div className="space-y-2 rounded-2xl bg-stone-50 border border-stone-200/90 p-2.5">
+            {isSuperAdmin && organizations.length > 0 && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-stone-500 block">
+                  Empresa / Filtro:
+                </label>
+                <select
+                  value={orgFilterId}
+                  onChange={(e) => setOrgFilterId(e.target.value)}
+                  className="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-medium focus:ring-1 focus:ring-stone-900"
+                >
+                  <option value="">Todas las empresas ({events.length})</option>
+                  {organizations.map((org) => (
+                    <option key={org.id} value={org.id}>
+                      {org.name} ({org.eventsCount})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-semibold uppercase tracking-wider text-stone-500">
+                  Boda Activa:
+                </label>
+                {selectedEvent && (
+                  <a
+                    href={`/e/${selectedEvent.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-amber-800 hover:text-amber-950 font-medium"
+                    title="Ver invitación pública en vivo"
                   >
-                    <option value="">Todas las empresas ({events.length})</option>
+                    <span>Ver</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                )}
+              </div>
+              <select
+                value={selectedEvent?.id || ''}
+                onChange={(e) => {
+                  const newId = e.target.value;
+                  setSelectedEventId(newId);
+                  if (typeof window !== 'undefined') {
+                    localStorage.setItem('invitaciones_selected_event_id', newId);
+                  }
+                }}
+                className="w-full rounded-xl border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-stone-900 focus:ring-1 focus:ring-stone-900 truncate"
+              >
+                {visibleEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.partnerOneName} &amp; {ev.partnerTwoName}
+                    {isSuperAdmin && ev.organizationName ? ` — [${ev.organizationName}]` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Acciones Rápidas */}
+            <div className="grid grid-cols-2 gap-1.5 pt-1 border-t border-stone-200/60">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNewEventForm((v) => !v);
+                  setMobileSidebarOpen(false);
+                }}
+                className="inline-flex items-center justify-center gap-1 rounded-xl bg-stone-900 hover:bg-stone-800 text-white py-1.5 text-[11px] font-medium shadow-xs transition"
+              >
+                <Plus className="h-3 w-3 text-[#b08d57]" />
+                <span>Nueva Boda</span>
+              </button>
+              {selectedEvent && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCouplePanel((v) => !v);
+                    setMobileSidebarOpen(false);
+                  }}
+                  className="inline-flex items-center justify-center gap-1 rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 py-1.5 text-[11px] font-medium transition"
+                  title="Gestionar accesos exclusivos de la pareja"
+                >
+                  <KeyRound className="h-3 w-3 text-amber-700" />
+                  <span>Pareja ({coupleUsers.length})</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Menú de Navegación Vertical (Sin scroll horizontal) */}
+        <div className="space-y-1">
+          <p className="px-2 text-[10px] font-semibold uppercase tracking-wider text-stone-400 mb-2">
+            Módulos del Sistema
+          </p>
+          <nav className="space-y-1">
+            {navTabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setActiveTab(tab.id);
+                    setMobileSidebarOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all text-left ${
+                    active
+                      ? 'bg-stone-900 text-white font-semibold shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900 hover:bg-stone-100'
+                  }`}
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${active ? 'text-[#b08d57]' : 'text-stone-400'}`} />
+                  <span className="truncate">{tab.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+      </div>
+
+      {/* Pie del Menú Lateral: Usuario & Salir */}
+      <div className="pt-3 border-t border-stone-200/80 space-y-2">
+        {currentUser && (
+          <button
+            type="button"
+            onClick={() => setShowProfileModal(true)}
+            className="w-full flex items-center justify-between p-2 rounded-xl bg-stone-50 hover:bg-stone-100 border border-stone-200/80 text-left transition"
+            title="Editar mis datos y credenciales"
+          >
+            <div className="min-w-0 flex-1 pr-2">
+              <p className="text-xs font-semibold text-stone-900 truncate">{currentUser.name}</p>
+              <p className="text-[10px] text-stone-500 truncate">{currentUser.email}</p>
+            </div>
+            <Pencil className="h-3.5 w-3.5 text-amber-700 shrink-0" />
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 py-2 text-xs font-medium text-stone-700 hover:text-stone-900 transition"
+        >
+          <LogOut className="h-3.5 w-3.5 text-stone-500" />
+          <span>Cerrar Sesión</span>
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-stone-100 flex flex-col md:flex-row text-stone-900">
+      {/* SIDEBAR DESKTOP */}
+      <aside className="hidden md:flex flex-col w-72 shrink-0 bg-white border-r border-stone-200/90 h-screen sticky top-0 overflow-y-auto no-scrollbar z-30 p-4 justify-between shadow-xs">
+        {renderSidebarContent()}
+      </aside>
+
+      {/* SIDEBAR MOBILE DRAWER */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-xs transition-opacity"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          <aside className="relative flex flex-col w-72 max-w-[85vw] bg-white h-full p-4 justify-between shadow-2xl z-10 overflow-y-auto no-scrollbar">
+            <div className="flex justify-end pb-2">
+              <button
+                type="button"
+                onClick={() => setMobileSidebarOpen(false)}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-700 hover:bg-stone-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            {renderSidebarContent()}
+          </aside>
+        </div>
+      )}
+
+      {/* ÁREA PRINCIPAL DE CONTENIDO */}
+      <div className="flex-1 min-w-0 flex flex-col min-h-screen">
+        {/* Barra Superior Móvil y Contexto Desktop */}
+        <header className="bg-white border-b border-stone-200/80 px-4 sm:px-6 py-3 flex items-center justify-between sticky top-0 z-20 shadow-xs">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setMobileSidebarOpen(true)}
+              className="md:hidden p-2 rounded-xl text-stone-600 hover:text-stone-900 hover:bg-stone-100 transition"
+              title="Abrir menú lateral"
+            >
+              <Menu className="h-5 w-5" />
+            </button>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-stone-400">
+                  {selectedEvent
+                    ? `${selectedEvent.partnerOneName} & ${selectedEvent.partnerTwoName}`
+                    : 'Invitaciones'}
+                </span>
+                <span className="text-stone-300">/</span>
+                <span className="text-xs font-semibold text-stone-800">
+                  {navTabs.find((t) => t.id === activeTab)?.label}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {selectedEvent && (
+              <a
+                href={`/e/${selectedEvent.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700 transition"
+              >
+                <ExternalLink className="h-3.5 w-3.5 text-[#b08d57]" />
+                <span className="hidden sm:inline">Ver Invitación</span>
+              </a>
+            )}
+          </div>
+        </header>
+
+        {/* Paneles Flotantes Contextuales */}
+        {canManageEvents && showNewEventForm && (
+          <div className="p-4 sm:p-6 bg-white border-b border-stone-200/90 shadow-sm animate-in fade-in duration-200">
+            <div className="max-w-5xl mx-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-serif text-lg font-semibold text-stone-900">Crear Nueva Boda</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowNewEventForm(false)}
+                  className="text-stone-400 hover:text-stone-700 text-xs"
+                >
+                  Cerrar [✕]
+                </button>
+              </div>
+              <form onSubmit={handleCreateEvent} className="grid sm:grid-cols-6 gap-3">
+                {isSuperAdmin && (
+                  <select
+                    value={newEventForm.organizationId}
+                    onChange={(e) =>
+                      setNewEventForm((p) => ({ ...p, organizationId: e.target.value }))
+                    }
+                    className="rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
+                  >
+                    <option value="">Empresa / Cliente Directo (Default)</option>
                     {organizations.map((org) => (
                       <option key={org.id} value={org.id}>
-                        {org.name} ({org.eventsCount})
+                        {org.name} ({org.eventsCount}/{org.maxEvents})
                       </option>
                     ))}
                   </select>
                 )}
-
-                {isOrgAdmin && currentUser?.organizationQuota && (
-                  <span className="rounded-xl bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700">
-                    Bodas: {currentUser.organizationQuota.eventsCount} /{' '}
-                    {currentUser.organizationQuota.maxEvents}
-                  </span>
-                )}
-
-                <select
-                  value={selectedEvent?.id || ''}
-                  onChange={(e) => setSelectedEventId(e.target.value)}
-                  className="rounded-xl border border-stone-300 bg-stone-50 px-3 py-1.5 text-sm font-medium max-w-xs"
+                <input
+                  type="text"
+                  placeholder="Slug (ej. maria-y-juan-2027)"
+                  value={newEventForm.slug}
+                  onChange={(e) => setNewEventForm((p) => ({ ...p, slug: e.target.value }))}
+                  required
+                  className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                />
+                <input
+                  type="text"
+                  placeholder="Pareja 1"
+                  value={newEventForm.partnerOneName}
+                  onChange={(e) => setNewEventForm((p) => ({ ...p, partnerOneName: e.target.value }))}
+                  required
+                  className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                />
+                <input
+                  type="text"
+                  placeholder="Pareja 2"
+                  value={newEventForm.partnerTwoName}
+                  onChange={(e) => setNewEventForm((p) => ({ ...p, partnerTwoName: e.target.value }))}
+                  required
+                  className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                />
+                <input
+                  type="datetime-local"
+                  value={newEventForm.eventDate}
+                  onChange={(e) => setNewEventForm((p) => ({ ...p, eventDate: e.target.value }))}
+                  required
+                  className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-stone-900 text-white text-xs font-semibold px-4 py-2 hover:bg-stone-800 transition"
                 >
-                  {visibleEvents.map((ev) => (
-                    <option key={ev.id} value={ev.id}>
-                      {ev.partnerOneName} &amp; {ev.partnerTwoName}
-                      {isSuperAdmin && ev.organizationName ? ` — [${ev.organizationName}]` : ''}
-                    </option>
-                  ))}
-                </select>
+                  Crear Evento
+                </button>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {canManageEvents && showCouplePanel && selectedEvent && (
+          <div className="p-4 sm:p-6 bg-amber-50/60 border-b border-amber-200/80 shadow-xs animate-in fade-in duration-200">
+            <div className="max-w-5xl mx-auto space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-serif text-base font-semibold text-stone-900">
+                    Accesos Exclusivos de Pareja — {selectedEvent.partnerOneName} &amp; {selectedEvent.partnerTwoName}
+                  </h3>
+                  <p className="text-xs text-stone-600">
+                    Cuentas exclusivas con rol Pareja (COUPLE) para ver RSVP, mesas y fotos de su boda.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowNewEventForm((v) => !v)}
-                  className="inline-flex items-center gap-1 rounded-xl border border-stone-300 px-3 py-1.5 text-xs font-medium hover:bg-stone-50"
+                  onClick={() => setShowCouplePanel(false)}
+                  className="text-stone-400 hover:text-stone-700 text-xs"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  Nueva Boda
+                  Cerrar [✕]
                 </button>
-                {selectedEvent && (
-                  <button
-                    type="button"
-                    onClick={() => setShowCouplePanel((v) => !v)}
-                    className="inline-flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-900 hover:bg-amber-100"
-                  >
-                    <KeyRound className="h-3.5 w-3.5" />
-                    Usuarios Pareja ({coupleUsers.length})
-                  </button>
-                )}
-              </>
-            ) : (
-              selectedEvent && (
-                <span className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-medium text-amber-900">
-                  {selectedEvent.partnerOneName} &amp; {selectedEvent.partnerTwoName}
-                </span>
-              )
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {currentUser && (
-              <button
-                type="button"
-                onClick={() => setShowProfileModal(true)}
-                title="Editar mis datos y contraseña"
-                className="inline-flex items-center gap-1.5 rounded-xl border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-100"
-              >
-                <Pencil className="h-3.5 w-3.5 text-amber-700" />
-                <span>
-                  {currentUser.name} ({currentUser.role})
-                </span>
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-stone-600 hover:text-stone-900"
-            >
-              <LogOut className="h-4 w-4" />
-              Salir
-            </button>
-          </div>
-        </div>
-
-        {/* Form Nuevo Evento (SuperAdmin y Wedding Planner) */}
-        {canManageEvents && showNewEventForm && (
-          <form
-            onSubmit={handleCreateEvent}
-            className="max-w-7xl mx-auto mt-4 pt-4 border-t border-stone-100 grid sm:grid-cols-6 gap-3"
-          >
-            {isSuperAdmin && (
-              <select
-                value={newEventForm.organizationId}
-                onChange={(e) =>
-                  setNewEventForm((p) => ({ ...p, organizationId: e.target.value }))
-                }
-                className="rounded-xl border border-stone-300 px-3 py-2 text-xs bg-white"
-              >
-                <option value="">Empresa / Cliente Directo (Default)</option>
-                {organizations.map((org) => (
-                  <option key={org.id} value={org.id}>
-                    {org.name} ({org.eventsCount}/{org.maxEvents})
-                  </option>
-                ))}
-              </select>
-            )}
-            <input
-              type="text"
-              placeholder="Slug (ej. maria-y-juan-2027)"
-              value={newEventForm.slug}
-              onChange={(e) => setNewEventForm((p) => ({ ...p, slug: e.target.value }))}
-              required
-              className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-            />
-            <input
-              type="text"
-              placeholder="Pareja 1"
-              value={newEventForm.partnerOneName}
-              onChange={(e) => setNewEventForm((p) => ({ ...p, partnerOneName: e.target.value }))}
-              required
-              className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-            />
-            <input
-              type="text"
-              placeholder="Pareja 2"
-              value={newEventForm.partnerTwoName}
-              onChange={(e) => setNewEventForm((p) => ({ ...p, partnerTwoName: e.target.value }))}
-              required
-              className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-            />
-            <input
-              type="datetime-local"
-              value={newEventForm.eventDate}
-              onChange={(e) => setNewEventForm((p) => ({ ...p, eventDate: e.target.value }))}
-              required
-              className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-            />
-            <button
-              type="submit"
-              className="rounded-xl bg-stone-900 text-white text-xs font-semibold px-4 py-2"
-            >
-              Crear Evento
-            </button>
-          </form>
-        )}
-
-        {/* Panel Acceso Propio de la Pareja (SuperAdmin y Wedding Planner) */}
-        {canManageEvents && showCouplePanel && selectedEvent && (
-          <div className="max-w-7xl mx-auto mt-4 pt-4 border-t border-stone-100 space-y-3">
-            <div className="text-xs font-semibold text-stone-700">
-              Cuentas con acceso exclusivo a este evento (para que la pareja elija mesas y revise su boda):
-            </div>
-            <form onSubmit={handleSaveCoupleUser} className="grid sm:grid-cols-4 gap-3">
-              <input
-                type="text"
-                placeholder="Nombre de la pareja"
-                value={coupleForm.name}
-                onChange={(e) => setCoupleForm((p) => ({ ...p, name: e.target.value }))}
-                required
-                className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-              />
-              <input
-                type="email"
-                placeholder="Correo de acceso"
-                value={coupleForm.email}
-                onChange={(e) => setCoupleForm((p) => ({ ...p, email: e.target.value }))}
-                required
-                className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-              />
-              <input
-                type="password"
-                placeholder="Contraseña (mín. 6 caracteres)"
-                value={coupleForm.password}
-                onChange={(e) => setCoupleForm((p) => ({ ...p, password: e.target.value }))}
-                required
-                minLength={6}
-                className="rounded-xl border border-stone-300 px-3 py-2 text-xs"
-              />
-              <button
-                type="submit"
-                className="rounded-xl bg-amber-700 text-white text-xs font-semibold px-4 py-2 hover:bg-amber-800"
-              >
-                Guardar Acceso Pareja
-              </button>
-            </form>
-
-            {coupleUsers.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {coupleUsers.map((cu) => (
-                  <div
-                    key={cu.id}
-                    className="inline-flex items-center gap-2 rounded-xl bg-stone-100 px-3 py-1.5 text-xs"
-                  >
-                    <span className="font-medium">{cu.name}</span>
-                    <span className="text-stone-500">({cu.email})</span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setEditingCoupleUser({
-                          id: cu.id,
-                          name: cu.name,
-                          email: cu.email,
-                          role: 'COUPLE',
-                          organizationId: selectedEvent.organizationId ?? null,
-                          assignedEventId: selectedEvent.id,
-                        })
-                      }
-                      className="text-amber-700 hover:underline font-medium"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        await apiFetch(
-                          `/api/events/${selectedEvent.id}/couple-users/${cu.id}`,
-                          { method: 'DELETE', auth: true }
-                        );
-                        loadEventDetails(selectedEvent.id, currentUser?.role);
-                      }}
-                      className="text-rose-600 hover:underline"
-                    >
-                      Quitar
-                    </button>
-                  </div>
-                ))}
               </div>
-            )}
+
+              <form onSubmit={handleSaveCoupleUser} className="grid sm:grid-cols-4 gap-3">
+                <input
+                  type="text"
+                  placeholder="Nombre de la pareja"
+                  value={coupleForm.name}
+                  onChange={(e) => setCoupleForm((p) => ({ ...p, name: e.target.value }))}
+                  required
+                  className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs"
+                />
+                <input
+                  type="email"
+                  placeholder="Correo de acceso"
+                  value={coupleForm.email}
+                  onChange={(e) => setCoupleForm((p) => ({ ...p, email: e.target.value }))}
+                  required
+                  className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs"
+                />
+                <input
+                  type="password"
+                  placeholder="Contraseña (mín. 6 caracteres)"
+                  value={coupleForm.password}
+                  onChange={(e) => setCoupleForm((p) => ({ ...p, password: e.target.value }))}
+                  required
+                  minLength={6}
+                  className="rounded-xl border border-stone-300 bg-white px-3 py-2 text-xs"
+                />
+                <button
+                  type="submit"
+                  className="rounded-xl bg-amber-700 text-white text-xs font-semibold px-4 py-2 hover:bg-amber-800 transition"
+                >
+                  Guardar Acceso Pareja
+                </button>
+              </form>
+
+              {coupleUsers.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {coupleUsers.map((cu) => (
+                    <div
+                      key={cu.id}
+                      className="inline-flex items-center gap-2 rounded-xl bg-white border border-stone-200 px-3 py-1.5 text-xs shadow-xs"
+                    >
+                      <span className="font-semibold text-stone-800">{cu.name}</span>
+                      <span className="text-stone-500">({cu.email})</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingCoupleUser({
+                            id: cu.id,
+                            name: cu.name,
+                            email: cu.email,
+                            role: 'COUPLE',
+                            organizationId: selectedEvent.organizationId ?? null,
+                            assignedEventId: selectedEvent.id,
+                          })
+                        }
+                        className="text-amber-700 hover:underline font-medium"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          await apiFetch(
+                            `/api/events/${selectedEvent.id}/couple-users/${cu.id}`,
+                            { method: 'DELETE', auth: true }
+                          );
+                          loadEventDetails(selectedEvent.id, currentUser?.role);
+                        }}
+                        className="text-rose-600 hover:underline"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
-      </header>
-
-      {/* Nav Tabs */}
-      <nav className="bg-white border-b border-stone-200 px-6">
-        <div className="max-w-7xl mx-auto flex overflow-x-auto gap-6 text-sm font-medium">
-          {[
-            ...(isSuperAdmin
-              ? [
-                  {
-                    id: 'ORGANIZATIONS',
-                    label: 'Empresas, Paquetes & Usuarios',
-                    icon: Building2,
-                  },
-                ]
-              : []),
-            { id: 'STATS', label: 'Estadísticas & Detalle', icon: BarChart3 },
-            { id: 'GUESTS', label: 'Invitados & RSVP', icon: Users },
-            { id: 'TABLES', label: 'Mesas & Puestos', icon: LayoutGrid },
-            { id: 'DISPATCH', label: 'WhatsApp QR & Gmail', icon: Send },
-            { id: 'CUSTOMIZE', label: 'Diseño & Secciones', icon: Palette },
-            { id: 'MEDIA', label: 'Álbum QR (Photos / Drive) & Deseos', icon: Camera },
-          ].map((tab) => {
-            const Icon = tab.icon;
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id as AdminTab)}
-                className={`inline-flex items-center gap-2 py-3.5 border-b-2 whitespace-nowrap transition ${
-                  active
-                    ? 'border-amber-700 text-stone-900'
-                    : 'border-transparent text-stone-500 hover:text-stone-800'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </nav>
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto p-6 space-y-6">
@@ -1123,6 +1295,28 @@ export default function AdminDashboardPage() {
                         </a>
                         <button
                           type="button"
+                          onClick={() => setShowDriveModal(true)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-stone-300 bg-white hover:bg-stone-50 px-3.5 py-2 text-xs font-semibold text-stone-800 shadow-xs transition"
+                        >
+                          <FolderOpen className="h-3.5 w-3.5 text-amber-700" />
+                          <span>Configurar Google Drive & Photos</span>
+                          <span className="inline-flex items-center gap-1">
+                            {qrInfo.googlePerEventConnected ? (
+                              <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 border border-emerald-200">
+                                Conectado
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-amber-100 text-amber-800 text-[10px] font-semibold px-2 py-0.5 border border-amber-200">
+                                Local
+                              </span>
+                            )}
+                            <span className="rounded-full bg-stone-100 text-stone-600 text-[10px] font-medium px-2 py-0.5 border border-stone-200">
+                              {selectedEvent.mediaProvider}
+                            </span>
+                          </span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={handleGoogleDriveConnect}
                           className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-semibold border ${
                             qrInfo.googlePerEventConnected
@@ -1137,7 +1331,7 @@ export default function AdminDashboardPage() {
                             ? `Conectado: ${qrInfo.googleAccountEmail || 'Cuenta de esta boda'} (Cambiar)`
                             : qrInfo.driveConfigured
                               ? 'Cuenta Global Activa — Vincular Correo Propio de esta Boda'
-                              : 'Conectar Cuenta Google de esta Boda'}
+                              : 'Vincular Cuenta Google'}
                         </button>
                         {qrInfo.googlePerEventConnected && (
                           <button
@@ -1150,9 +1344,7 @@ export default function AdminDashboardPage() {
                         )}
                       </div>
                       <p className="text-[11px] text-stone-500 max-w-xl pt-1">
-                        {qrInfo.googleOAuthAppConfigured
-                          ? 'Cada boda puede vincular su propio correo de Gmail / Google Photos / Drive. Si no vinculas uno, las fotos se guardarán en el respaldo local del servidor.'
-                          : 'Para habilitar la sincronización con Gmail / Google Photos / Drive por boda, configura una sola vez GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en backend/.env (Redirect URI: http://localhost:4006/api/media/google/callback). Mientras tanto, las fotos se guardan en respaldo local.'}
+                        Cada boda puede vincular su propia cuenta de Gmail / Google Photos / Drive o usar el almacenamiento local del servidor. Todo es 100% parametrizable desde la pantalla.
                       </p>
                     </div>
                     <img
@@ -1274,6 +1466,7 @@ export default function AdminDashboardPage() {
           </>
         )}
       </main>
+      </div>
 
       {editingGuest && selectedEvent && (
         <GuestEditModal
@@ -1345,6 +1538,26 @@ export default function AdminDashboardPage() {
                 : prev
             );
             loadSessionAndEvents();
+          }}
+        />
+      )}
+
+      {showDriveModal && selectedEvent && (
+        <DriveConfigModal
+          eventId={selectedEvent.id}
+          weddingTitle={selectedEvent.title}
+          initialConfig={{
+            mediaProvider: selectedEvent.mediaProvider,
+            driveFolderId: selectedEvent.driveFolderId,
+            driveFolderUrl: selectedEvent.driveFolderUrl,
+            photosAlbumId: selectedEvent.photosAlbumId,
+            photosAlbumUrl: selectedEvent.photosAlbumUrl,
+            googleAccountEmail: qrInfo?.googleAccountEmail,
+            googlePerEventConnected: qrInfo?.googlePerEventConnected,
+          }}
+          onClose={() => setShowDriveModal(false)}
+          onSaved={() => {
+            loadEventDetails(selectedEvent.id, currentUser?.role);
           }}
         />
       )}
