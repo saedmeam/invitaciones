@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { Sparkles, Heart } from 'lucide-react';
-import { EventTheme } from '@/types/invitation';
+import { EventTheme, EnvelopeStyleType, EnvelopeFlapType } from '@/types/invitation';
+import { getEnvelopeStyleConfig } from '@/lib/envelopeStyles';
 
 export interface WaxSealEnvelopeProps {
   partnerOneName: string;
@@ -14,6 +15,8 @@ export interface WaxSealEnvelopeProps {
   openLabel?: string;
   waxSealMonogram?: string;
   waxSealColor?: string;
+  envelopeStyle?: EnvelopeStyleType;
+  envelopeFlap?: EnvelopeFlapType;
   onSealBreak?: () => void;
   onOpenComplete: () => void;
 }
@@ -28,11 +31,15 @@ export function WaxSealEnvelope({
   openLabel = 'Toca el sello para abrir',
   waxSealMonogram,
   waxSealColor,
+  envelopeStyle = 'IVORY_GOLD_DECKLE',
+  envelopeFlap = 'EURO_TRIANGLE',
   onSealBreak,
   onOpenComplete,
 }: WaxSealEnvelopeProps) {
   const [animationState, setAnimationState] = useState<'closed' | 'opening' | 'open'>('closed');
   const [sealPressed, setSealPressed] = useState(false);
+
+  const styleConfig = getEnvelopeStyleConfig(envelopeStyle);
 
   // Monograma de gala de los novios parametrizable (por defecto 'S&J')
   const rawMonogram = (waxSealMonogram && waxSealMonogram.trim()) || 'S&J';
@@ -43,7 +50,7 @@ export function WaxSealEnvelope({
   const isFlapOpen = animationState === 'opening' || animationState === 'open';
   const isCardUp = animationState === 'open';
 
-  // Determinación del color del lacre de cera según tema o parámetro explícito
+  // Determinación del color del lacre de cera según color explícito o estilo de sobre
   const resolveSealColor = (): 'burgundy' | 'gold' | 'olive' | 'emerald' | 'sapphire' | 'terracotta' | 'lavender' | 'graphite' => {
     if (waxSealColor) {
       const c = waxSealColor.toLowerCase();
@@ -59,6 +66,9 @@ export function WaxSealEnvelope({
       ) {
         return c;
       }
+    }
+    if (styleConfig.recommendedSealColor) {
+      return styleConfig.recommendedSealColor;
     }
     switch (theme) {
       case 'CLASSIC_NOCTURNE':
@@ -158,11 +168,38 @@ export function WaxSealEnvelope({
   };
   const currentSealStyle = sealColorStyles[sealColor] || sealColorStyles.burgundy;
 
+  // Parámetros geométricos según tipo de solapa
+  const flapGeometry = (() => {
+    switch (envelopeFlap) {
+      case 'BARONIAL_ROUND':
+        return {
+          heightPercent: '54%',
+          clipPath: 'polygon(0% 0%, 100% 0%, 94% 65%, 50% 100%, 6% 65%)',
+          svgPoints: '0,0 100,0 94,65 50,100 6,65',
+          sealTop: '54%',
+        };
+      case 'DIAMOND_PEAK':
+        return {
+          heightPercent: '50%',
+          clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)',
+          svgPoints: '0,0 100,0 50,100',
+          sealTop: '50%',
+        };
+      case 'EURO_TRIANGLE':
+      default:
+        return {
+          heightPercent: '56%',
+          clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)',
+          svgPoints: '0,0 100,0 50,100',
+          sealTop: '56%',
+        };
+    }
+  })();
+
   const handleSealClick = () => {
     if (animationState !== 'closed') return;
     setSealPressed(true);
 
-    // Disparo síncrono para garantizar autoplay de audio en iOS y Android
     if (onSealBreak) {
       try {
         onSealBreak();
@@ -185,59 +222,78 @@ export function WaxSealEnvelope({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#0f0e0d]/90 backdrop-blur-md overflow-hidden select-none">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#090807]/90 backdrop-blur-md overflow-hidden select-none">
       {/* Contenedor con perspectiva 3D */}
       <div
-        className="relative w-full max-w-[440px] sm:max-w-[500px] h-[300px] sm:h-[340px]"
-        style={{ perspective: '1400px' }}
+        className="relative w-full max-w-[460px] sm:max-w-[520px] h-[310px] sm:h-[350px]"
+        style={{ perspective: '1500px' }}
       >
-        {/* Cuerpo del Sobre */}
+        {/* Cuerpo del Sobre con relieve multicapa */}
         <div
           className="relative w-full h-full rounded-2xl transition-transform duration-700 ease-out"
           style={{
             transformStyle: 'preserve-3d',
-            transform: isCardUp ? 'translateY(50px) scale(0.96)' : 'translateY(0px)',
-            filter: 'drop-shadow(0 25px 35px rgba(0,0,0,0.55)) drop-shadow(0 8px 12px rgba(0,0,0,0.35))',
+            transform: isCardUp ? 'translateY(55px) scale(0.96)' : 'translateY(0px)',
+            filter: 'drop-shadow(0 30px 45px rgba(0,0,0,0.65)) drop-shadow(0 10px 18px rgba(0,0,0,0.45))',
           }}
         >
-          {/* 1. Fondo interior del sobre (cavidad interior forrada en oro/grafito) */}
+          {/* 1. Cavidad Interior del Sobre & Forro de Gala (Envelope Liner) */}
           <div
-            className="absolute inset-0 rounded-2xl overflow-hidden border border-[#d8c5aa]/40"
+            className="absolute inset-0 rounded-2xl overflow-hidden border"
             style={{
-              background: 'linear-gradient(145deg, #1f1d1a 0%, #2b2722 50%, #1a1714 100%)',
-              boxShadow: 'inset 0 10px 30px rgba(0,0,0,0.7)',
+              background: styleConfig.linerBackground,
+              borderColor: `${styleConfig.foilColor}40`,
+              boxShadow: 'inset 0 14px 35px rgba(0,0,0,0.85)',
             }}
           >
-            {/* Forro interior de lujo dorado */}
+            {/* Patrón vectorial del forro interior (Liner) */}
             <div
-              className="absolute inset-2 rounded-xl opacity-20"
+              className="absolute inset-2 rounded-xl"
               style={{
-                backgroundImage: 'radial-gradient(#d4af37 0.8px, transparent 0.8px)',
-                backgroundSize: '16px 16px',
+                backgroundImage: `url("${styleConfig.linerPatternSvg}")`,
+                backgroundRepeat: 'repeat',
+                opacity: 0.9,
               }}
+            />
+            {/* Ribete dorado interior perimetral */}
+            <div
+              className="absolute inset-2.5 rounded-xl border pointer-events-none opacity-40"
+              style={{ borderColor: styleConfig.foilColor }}
             />
           </div>
 
           {/* 2. Tarjeta interior de la Invitación (se desliza hacia arriba) */}
           <div
-            className="absolute left-4 right-4 top-3 bottom-3 rounded-xl bg-[#faf7f2] border border-[#e5d8c3] p-5 sm:p-7 flex flex-col justify-between items-center text-center text-stone-900 transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]"
+            className="absolute left-4 right-4 top-3 bottom-3 rounded-xl bg-[#faf7f2] p-5 sm:p-7 flex flex-col justify-between items-center text-center text-stone-900 transition-all duration-1000 ease-[cubic-bezier(0.16,1,0.3,1)]"
             style={{
               zIndex: isFlapOpen ? 30 : 10,
               transform: isCardUp
                 ? 'translateY(-68%) translateZ(40px) scale(1.02)'
                 : 'translateY(0px) translateZ(0px)',
+              border: styleConfig.cardBorder,
               boxShadow: isCardUp
-                ? '0 30px 60px -15px rgba(0, 0, 0, 0.5), 0 0 1px 1px rgba(212,175,55,0.35)'
+                ? '0 30px 60px -15px rgba(0, 0, 0, 0.55), 0 0 1px 1px rgba(212,175,55,0.45)'
                 : '0 4px 10px rgba(0, 0, 0, 0.1)',
             }}
           >
+            {/* Doble marco fino editorial de gala perimetral */}
+            <div className="absolute inset-2 border border-[#d4af37]/35 rounded-lg pointer-events-none" />
+
             <div>
-              <span className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.3em] uppercase text-[#9e7b44] font-medium font-sans">
-                <Heart className="w-2.5 h-2.5 fill-[#9e7b44]" /> Nuestra Boda
+              <span
+                className="inline-flex items-center gap-1.5 text-[10px] tracking-[0.3em] uppercase font-medium font-sans"
+                style={{ color: styleConfig.cardAccentColor }}
+              >
+                <Heart className="w-2.5 h-2.5 fill-current" /> Nuestra Boda
               </span>
               <h2 className="font-serif text-2xl sm:text-3xl font-semibold tracking-tight text-stone-900 mt-2 leading-tight">
                 {partnerOneName}
-                <span className="font-script text-3xl sm:text-4xl italic text-[#b08d57] mx-2">&amp;</span>
+                <span
+                  className="font-script text-3xl sm:text-4xl italic mx-2"
+                  style={{ color: styleConfig.cardAccentColor }}
+                >
+                  &amp;
+                </span>
                 {partnerTwoName}
               </h2>
             </div>
@@ -250,7 +306,10 @@ export function WaxSealEnvelope({
                   {groupName}
                 </p>
                 {typeof maxGuests === 'number' && maxGuests > 0 && (
-                  <p className="text-[11px] text-[#9e7b44] mt-0.5 font-sans font-medium">
+                  <p
+                    className="text-[11px] mt-0.5 font-sans font-medium"
+                    style={{ color: styleConfig.cardAccentColor }}
+                  >
                     {maxGuests} {maxGuests === 1 ? 'pase reservado' : 'pases reservados'}
                   </p>
                 )}
@@ -263,7 +322,10 @@ export function WaxSealEnvelope({
                   {eventDateFormatted}
                 </p>
               )}
-              <div className="mt-2 flex items-center justify-center gap-1.5 text-[11px] text-[#b08d57] font-semibold uppercase tracking-wider font-sans">
+              <div
+                className="mt-2 flex items-center justify-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider font-sans"
+                style={{ color: styleConfig.cardAccentColor }}
+              >
                 <Sparkles className="w-3.5 h-3.5 animate-pulse" />
                 Deslizando invitación...
               </div>
@@ -271,7 +333,6 @@ export function WaxSealEnvelope({
           </div>
 
           {/* 3. Solapas frontales del sobre (Laterales e inferior) */}
-          {/* Vértice central unificado exactamente en 50% X, 54% Y para simetría milimétrica */}
           <div
             className="absolute inset-0 pointer-events-none rounded-2xl overflow-hidden"
             style={{ zIndex: 25 }}
@@ -280,36 +341,119 @@ export function WaxSealEnvelope({
             <div
               className="absolute inset-0"
               style={{
-                clipPath: 'polygon(0% 0%, 50% 54%, 0% 100%)',
-                background: 'linear-gradient(135deg, #ede3d3 0%, #dfd3bf 100%)',
-                filter: 'drop-shadow(2px 0 5px rgba(0,0,0,0.12))',
+                clipPath: 'polygon(0% 0%, 50% 56%, 0% 100%)',
+                background: styleConfig.leftFlapGradient,
+                filter: 'drop-shadow(3px 0 6px rgba(0,0,0,0.18))',
               }}
             />
+            {/* Foil Edge Izquierdo */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              <line
+                x1="0"
+                y1="0"
+                x2="50"
+                y2="56"
+                stroke={styleConfig.foilColor}
+                strokeWidth="0.8"
+                strokeOpacity="0.65"
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1="50"
+                y1="56"
+                x2="0"
+                y2="100"
+                stroke={styleConfig.foilColor}
+                strokeWidth="0.8"
+                strokeOpacity="0.65"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+
             {/* Solapa Derecha */}
             <div
               className="absolute inset-0"
               style={{
-                clipPath: 'polygon(100% 0%, 50% 54%, 100% 100%)',
-                background: 'linear-gradient(225deg, #ede3d3 0%, #dfd3bf 100%)',
-                filter: 'drop-shadow(-2px 0 5px rgba(0,0,0,0.12))',
+                clipPath: 'polygon(100% 0%, 50% 56%, 100% 100%)',
+                background: styleConfig.rightFlapGradient,
+                filter: 'drop-shadow(-3px 0 6px rgba(0,0,0,0.18))',
               }}
             />
+            {/* Foil Edge Derecho */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              <line
+                x1="100"
+                y1="0"
+                x2="50"
+                y2="56"
+                stroke={styleConfig.foilColor}
+                strokeWidth="0.8"
+                strokeOpacity="0.65"
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1="50"
+                y1="56"
+                x2="100"
+                y2="100"
+                stroke={styleConfig.foilColor}
+                strokeWidth="0.8"
+                strokeOpacity="0.65"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
+
             {/* Solapa Inferior */}
             <div
               className="absolute inset-0"
               style={{
-                clipPath: 'polygon(0% 100%, 50% 54%, 100% 100%)',
-                background: 'linear-gradient(0deg, #dfd3bf 0%, #f4ece1 100%)',
-                filter: 'drop-shadow(0 -3px 8px rgba(0,0,0,0.15))',
+                clipPath: 'polygon(0% 100%, 50% 56%, 100% 100%)',
+                background: styleConfig.bottomFlapGradient,
+                filter: 'drop-shadow(0 -4px 10px rgba(0,0,0,0.22))',
               }}
             />
+            {/* Foil Edge Inferior */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+            >
+              <line
+                x1="0"
+                y1="100"
+                x2="50"
+                y2="56"
+                stroke={styleConfig.foilColor}
+                strokeWidth="1"
+                strokeOpacity="0.85"
+                vectorEffect="non-scaling-stroke"
+              />
+              <line
+                x1="50"
+                y1="56"
+                x2="100"
+                y2="100"
+                stroke={styleConfig.foilColor}
+                strokeWidth="1"
+                strokeOpacity="0.85"
+                vectorEffect="non-scaling-stroke"
+              />
+            </svg>
           </div>
 
-          {/* 4. Solapa Triangular Superior 3D (se abre hacia arriba con rotateX) */}
-          {/* Su vértice baja exactamente al 54% de la altura total del sobre */}
+          {/* 4. Solapa Superior 3D (se abre hacia arriba con rotateX) */}
           <div
-            className="absolute top-0 left-0 right-0 h-[54%] rounded-t-2xl transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
+            className="absolute top-0 left-0 right-0 rounded-t-2xl transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
             style={{
+              height: flapGeometry.heightPercent,
               transformOrigin: 'top center',
               transformStyle: 'preserve-3d',
               transform: isFlapOpen ? 'rotateX(180deg)' : 'rotateX(0deg)',
@@ -320,27 +464,64 @@ export function WaxSealEnvelope({
             <div
               className="absolute inset-0 rounded-t-2xl"
               style={{
-                clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)',
-                background: 'linear-gradient(180deg, #f7efe4 0%, #e8dcc8 70%, #dbcbb3 100%)',
-                filter: 'drop-shadow(0 8px 14px rgba(0,0,0,0.22))',
+                clipPath: flapGeometry.clipPath,
+                background: styleConfig.topFlapGradient,
+                filter: 'drop-shadow(0 10px 18px rgba(0,0,0,0.3))',
                 backfaceVisibility: 'hidden',
               }}
-            />
+            >
+              {/* Foil de Oro Real en el Borde de la Solapa Exterior */}
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
+                <polygon
+                  points={flapGeometry.svgPoints}
+                  fill="none"
+                  stroke={styleConfig.foilColor}
+                  strokeWidth="1.6"
+                  strokeOpacity="0.95"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            </div>
 
-            {/* Cara Interior de la Solapa (Abierta hacia arriba) */}
+            {/* Cara Interior de la Solapa (Abierta hacia arriba) con Forro (Liner) visible */}
             <div
-              className="absolute inset-0 rounded-b-2xl"
+              className="absolute inset-0 rounded-b-2xl overflow-hidden"
               style={{
-                clipPath: 'polygon(0% 0%, 100% 0%, 50% 100%)',
-                background: 'linear-gradient(0deg, #2b2722 0%, #1f1d1a 100%)',
+                clipPath: flapGeometry.clipPath,
+                background: styleConfig.backOfFlapGradient,
                 transform: 'rotateY(180deg) rotateZ(180deg)',
                 backfaceVisibility: 'hidden',
               }}
-            />
+            >
+              <div
+                className="absolute inset-0 opacity-80"
+                style={{
+                  backgroundImage: `url("${styleConfig.linerPatternSvg}")`,
+                  backgroundRepeat: 'repeat',
+                }}
+              />
+              <svg
+                className="absolute inset-0 w-full h-full pointer-events-none"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
+                <polygon
+                  points={flapGeometry.svgPoints}
+                  fill="none"
+                  stroke={styleConfig.foilColor}
+                  strokeWidth="1.6"
+                  strokeOpacity="0.9"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </svg>
+            </div>
           </div>
 
           {/* 5. Sello de Cera Táctil 3D (Wax Seal) */}
-          {/* Centrado exactamente en la cúspide de los 4 pliegues (50% X, 54% Y) */}
           <button
             type="button"
             onClick={handleSealClick}
@@ -349,7 +530,7 @@ export function WaxSealEnvelope({
               sealPressed ? 'scale-90' : 'hover:scale-105 active:scale-95'
             }`}
             style={{
-              top: '54%',
+              top: flapGeometry.sealTop,
               zIndex: isFlapOpen ? 15 : 50,
               opacity: isCardUp ? 0 : 1,
               pointerEvents: isFlapOpen ? 'none' : 'auto',
@@ -358,7 +539,10 @@ export function WaxSealEnvelope({
           >
             {/* Halo dorado pulsante tenue */}
             {!isFlapOpen && (
-              <div className="absolute -inset-4 rounded-full bg-amber-400/25 blur-lg animate-pulse" />
+              <div
+                className="absolute -inset-4 rounded-full blur-xl animate-pulse"
+                style={{ backgroundColor: `${styleConfig.foilColor}30` }}
+              />
             )}
 
             {/* Medallón de cera fundida artesanal */}
@@ -367,7 +551,7 @@ export function WaxSealEnvelope({
               style={{
                 borderRadius: '50% 50% 49% 51% / 51% 49% 50% 50%',
                 background: currentSealStyle.bg,
-                boxShadow: currentSealStyle.shadow,
+                boxShadow: `${currentSealStyle.shadow}, 0 0 20px ${styleConfig.foilColor}30`,
               }}
             >
               {/* Borde troquelado con puntadas artesanales */}
@@ -401,8 +585,10 @@ export function WaxSealEnvelope({
 
             {/* Pastilla refinada "Toca para abrir" con tipografía nupcial y microanimación */}
             {!isFlapOpen && (
-              <div className="absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-stone-900/90 text-[#f7efe4] text-[11px] font-sans font-medium tracking-[0.2em] uppercase border border-[#b08d57]/40 shadow-xl backdrop-blur-md transition-all duration-300 group-hover:scale-105 group-hover:border-[#d4af37]">
-                <Sparkles className="w-3 h-3 text-[#d4af37] animate-pulse" />
+              <div
+                className={`absolute -bottom-10 left-1/2 -translate-x-1/2 whitespace-nowrap inline-flex items-center gap-2 px-5 py-2 rounded-full ${styleConfig.buttonStyle.bg} ${styleConfig.buttonStyle.text} text-[11px] font-sans font-semibold tracking-[0.22em] uppercase border ${styleConfig.buttonStyle.border} shadow-2xl backdrop-blur-md transition-all duration-300 group-hover:scale-105`}
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${styleConfig.buttonStyle.icon} animate-pulse`} />
                 <span>{openLabel}</span>
               </div>
             )}

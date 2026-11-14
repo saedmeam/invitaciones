@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
+  CalendarHeart,
   Check,
   Crown,
   Disc3,
@@ -11,6 +12,8 @@ import {
   HardDrive,
   Image as ImageIcon,
   Loader2,
+  Mail,
+  MapPin,
   Music,
   Palette,
   Plus,
@@ -29,6 +32,8 @@ import { parseAudioSource, getSpotifyPlaylistEmbedUrl } from '@/lib/audioSource'
 import { DriveConfigModal } from './DriveConfigModal';
 import {
   BankAccountItem,
+  EnvelopeFlapType,
+  EnvelopeStyleType,
   EventPlanTier,
   EventSectionsConfig,
   EventTheme,
@@ -38,12 +43,68 @@ import {
   StoryItem,
   WeddingEvent,
 } from '@/types/invitation';
+import {
+  ENVELOPE_STYLES,
+  ENVELOPE_FLAP_OPTIONS,
+  getEnvelopeStyleConfig,
+} from '@/lib/envelopeStyles';
 
 interface AdminCustomizerTabProps {
   event: WeddingEvent;
   isSuperAdmin?: boolean;
   onUpdated: (ev: WeddingEvent) => void;
 }
+
+export type CustomizerSubTab =
+  | 'PACKAGE_STYLE'
+  | 'ENVELOPE_ATMOSPHERE'
+  | 'EVENT_LOCATIONS'
+  | 'MUSIC_MULTIMEDIA'
+  | 'TEXTS_SECTIONS';
+
+const SUB_TABS_CONFIG: Array<{
+  id: CustomizerSubTab;
+  label: string;
+  badge: string;
+  icon: React.ComponentType<{ className?: string }>;
+  description: string;
+}> = [
+  {
+    id: 'PACKAGE_STYLE',
+    label: 'Paquete & Estilo',
+    badge: '12 Estilos Gala',
+    icon: Palette,
+    description: 'Plan contratado y paletas cromáticas',
+  },
+  {
+    id: 'ENVELOPE_ATMOSPHERE',
+    label: 'Sobre 3D & Atmósfera',
+    badge: 'Experiencia 3D',
+    icon: Sparkles,
+    description: 'Lacre, monograma, partículas y fondo',
+  },
+  {
+    id: 'EVENT_LOCATIONS',
+    label: 'Datos & Ubicaciones',
+    badge: 'Ceremonia & Fiesta',
+    icon: MapPin,
+    description: 'Nombres, fechas, mapas y portada',
+  },
+  {
+    id: 'MUSIC_MULTIMEDIA',
+    label: 'Música & Multimedia',
+    badge: 'Audio & Cloud QR',
+    icon: Music,
+    description: 'Música, Spotify, galería y Drive/Photos',
+  },
+  {
+    id: 'TEXTS_SECTIONS',
+    label: 'Textos & Secciones',
+    badge: 'Módulos & Contenido',
+    icon: Sliders,
+    description: 'Visibilidad, bienvenida, vestimenta y FAQ',
+  },
+];
 
 const FINE_BACKGROUND_PRESETS = [
   {
@@ -196,6 +257,7 @@ const SECTION_LABELS: Array<{ key: keyof EventSectionsConfig; label: string; des
 ];
 
 export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: AdminCustomizerTabProps) {
+  const [activeSubTab, setActiveSubTab] = useState<CustomizerSubTab>('PACKAGE_STYLE');
   const [showDriveModal, setShowDriveModal] = useState(false);
   const c = event.contentConfig || {};
   const isPlannerEvent = event.organizationType === 'PLANNER';
@@ -228,6 +290,8 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
     coverImageUrl: event.themeConfig.coverImageUrl || '',
     waxSealMonogram: event.themeConfig.waxSealMonogram || 'S&J',
     waxSealColor: event.themeConfig.waxSealColor || '',
+    envelopeStyle: (event.themeConfig.envelopeStyle || 'IVORY_GOLD_DECKLE') as EnvelopeStyleType,
+    envelopeFlap: (event.themeConfig.envelopeFlap || 'EURO_TRIANGLE') as EnvelopeFlapType,
     particleEffect: (event.themeConfig.particleEffect || 'ROSE_PETALS') as ParticleEffectType,
     backgroundClean: event.themeConfig.backgroundClean ?? true,
     backgroundImageUrl: event.themeConfig.backgroundImageUrl || '',
@@ -319,6 +383,8 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
       coverImageUrl: event.themeConfig.coverImageUrl || '',
       waxSealMonogram: event.themeConfig.waxSealMonogram || 'S&J',
       waxSealColor: event.themeConfig.waxSealColor || '',
+      envelopeStyle: (event.themeConfig.envelopeStyle || 'IVORY_GOLD_DECKLE') as EnvelopeStyleType,
+      envelopeFlap: (event.themeConfig.envelopeFlap || 'EURO_TRIANGLE') as EnvelopeFlapType,
       particleEffect: (event.themeConfig.particleEffect || 'ROSE_PETALS') as ParticleEffectType,
       backgroundClean: event.themeConfig.backgroundClean ?? true,
       backgroundImageUrl: event.themeConfig.backgroundImageUrl || '',
@@ -529,6 +595,8 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
           coverImageUrl: form.coverImageUrl,
           waxSealMonogram: form.waxSealMonogram.trim() || 'S&J',
           waxSealColor: form.waxSealColor || undefined,
+          envelopeStyle: form.envelopeStyle,
+          envelopeFlap: form.envelopeFlap,
           particleEffect: form.particleEffect,
           backgroundClean: form.backgroundClean,
           backgroundImageUrl: form.backgroundImageUrl,
@@ -624,317 +692,661 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
         </div>
       </div>
 
-      {/* Selector de Nivel de Plan de la Boda (Solo SuperAdmin en bodas directas B2C) */}
-      {canChangePlan && (
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-3">
-          <div className="flex items-center gap-2">
-            <Crown className="h-5 w-5 text-amber-700" />
-            <div>
-              <h4 className="font-semibold text-sm text-stone-900">
-                Nivel de Plan &amp; Servicios Habilitados de la Boda (Exclusivo SuperAdmin - Boda Directa)
-              </h4>
-              <p className="text-xs text-stone-500">
-                Selecciona el paquete contratado por esta pareja (Clásico o Premium). Los Wedding Planners no ven esta opción y tienen siempre Plan Premium completo.
-              </p>
-            </div>
-          </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
-            Plan Actual: <strong className="uppercase">{form.planTier === 'CLASSIC' ? 'Clásico' : 'Premium'}</strong>
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Plan Clásico */}
-          <div
-            onClick={() => setForm((p) => ({ ...p, planTier: 'CLASSIC' }))}
-            className={`cursor-pointer rounded-2xl border-2 p-5 transition-all relative ${
-              form.planTier === 'CLASSIC'
-                ? 'border-stone-900 bg-stone-50/80 shadow-md ring-1 ring-stone-900'
-                : 'border-stone-200 hover:border-stone-300 bg-white'
-            }`}
-          >
-            <div className="flex items-center justify-between mb-2">
-              <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
-                <ShieldCheck className="h-3.5 w-3.5 text-stone-600" />
-                Plan Clásico
-              </span>
-              <div className="text-right">
-                <span className="text-[10px] line-through text-stone-400 mr-1.5">$99</span>
-                <span className="text-sm font-bold text-stone-900">$75 USD</span>
-                <span className="block text-[9px] text-emerald-700 font-medium">Promo: $69 USD (6 meses activa)</span>
-              </div>
-            </div>
-            <h5 className="font-serif text-lg font-medium text-stone-900 mb-1">Clásico Editorial</h5>
-            <p className="text-xs text-stone-500 mb-3 leading-relaxed">
-              Invitación web limpia y directa (abre sin sobre 3D). Vigencia de hasta 6 meses (5 meses antes + 1 mes post-boda).
-            </p>
-            <ul className="text-[11px] text-stone-600 space-y-1.5 pt-2 border-t border-stone-200/60 font-sans">
-              <li className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span>Cuenta regresiva, Google Maps y calendario (.ICS)</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
-                <span>Confirmación RSVP estándar, código de vestimenta y regalos</span>
-              </li>
-              <li className="flex items-center gap-1.5 text-stone-400">
-                <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
-                <span>Sin envíos por WhatsApp/Gmail ni pases QR</span>
-              </li>
-              <li className="flex items-center gap-1.5 text-stone-400">
-                <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
-                <span>Sin sobre 3D, música de fondo ni playlist Spotify</span>
-              </li>
-              <li className="flex items-center gap-1.5 text-stone-400">
-                <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
-                <span>Sin pétalos 3D, galería, mesas ni álbum QR</span>
-              </li>
-            </ul>
-          </div>
-
-          {/* Plan Premium */}
-          <div
-            onClick={() => setForm((p) => ({ ...p, planTier: 'PREMIUM' }))}
-            className={`cursor-pointer rounded-2xl border-2 p-5 transition-all relative ${
-              form.planTier === 'PREMIUM'
-                ? 'border-[#b08d57] bg-amber-50/40 shadow-md ring-1 ring-[#b08d57]'
-                : 'border-stone-200 hover:border-amber-300 bg-white'
-            }`}
-          >
-            <div className="absolute -top-2.5 right-4 rounded-full bg-gradient-to-r from-amber-600 to-amber-700 px-2.5 py-0.5 text-[10px] font-bold uppercase text-white shadow-xs">
-              Todo Incluido • Más Elegido
-            </div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
-                Plan Premium (Parejas &amp; Planners)
-              </span>
-              <div className="text-right">
-                <span className="text-[10px] line-through text-stone-400 mr-1.5">$149</span>
-                <span className="text-sm font-bold text-amber-900">$109 USD</span>
-                <span className="block text-[9px] text-amber-700 font-medium">Promo: $99 USD (6 meses activa)</span>
-              </div>
-            </div>
-            <h5 className="font-serif text-lg font-medium text-stone-900 mb-1">Experiencia Completa</h5>
-            <p className="text-xs text-stone-500 mb-3 leading-relaxed">
-              100% de funciones interactivas, WhatsApp QR y fotos en Google Drive del cliente. Vigencia 6 meses (+$15 por 3 meses extra).
-            </p>
-            <ul className="text-[11px] text-stone-700 space-y-1.5 pt-2 border-t border-amber-200/60 font-sans">
-              <li className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
-                <span>Sobre 3D animado con monograma &amp; lacre personalizado</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
-                <span>Música de fondo &amp; reproductor Spotify + Pétalos 3D</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
-                <span>Galería prenupcial, Seating Plan de mesas y Muro de deseos</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
-                <span>Álbum QR conectado al Google Photos / Drive del cliente</span>
-              </li>
-              <li className="flex items-center gap-1.5">
-                <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
-                <span>Difusión masiva por WhatsApp &amp; Pase QR por familia</span>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* Selector de 12 Paletas y Diseños de Gala */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Palette className="h-4 w-4 text-amber-700" />
-            <h4 className="font-semibold text-sm text-stone-900">
-              Paletas de Color &amp; Diseños de Gala (12 Estilos Exclusivos)
-            </h4>
-          </div>
-          <span className="text-xs text-stone-500 font-medium">
-            Selecciona el tema visual para la invitación y el sobre
-          </span>
-        </div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {(Object.keys(THEME_METADATA) as EventTheme[]).map((themeKey) => {
-            const meta = THEME_METADATA[themeKey];
-            const selected = form.theme === themeKey;
+      {/* Barra de Sub-Pestañas de Configuración */}
+      <div className="bg-white rounded-2xl border border-stone-200 p-2 shadow-xs">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
+          {SUB_TABS_CONFIG.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeSubTab === tab.id;
             return (
               <button
-                key={themeKey}
+                key={tab.id}
                 type="button"
-                onClick={() => setForm((prev) => ({ ...prev, theme: themeKey }))}
-                className={`group text-left rounded-2xl border-2 p-4 transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
-                  selected
-                    ? 'border-amber-600 bg-amber-50/50 shadow-md ring-2 ring-amber-600/20'
-                    : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50/50'
+                onClick={() => setActiveSubTab(tab.id)}
+                className={`group flex flex-col items-start text-left p-3 rounded-xl transition-all duration-150 relative ${
+                  isActive
+                    ? 'bg-stone-900 text-white shadow-md'
+                    : 'hover:bg-stone-100 text-stone-600 hover:text-stone-900 bg-stone-50/50'
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 text-stone-700 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
-                      {meta.category}
-                    </span>
-                    {selected && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
-                        <Check className="h-3 w-3" /> Activo
-                      </span>
-                    )}
-                  </div>
-                  <h5 className="font-semibold text-sm text-stone-900 group-hover:text-amber-900 transition-colors">
-                    {meta.label}
-                  </h5>
-                  <p className="text-xs text-stone-600 mt-1 leading-relaxed">
-                    {meta.description}
-                  </p>
-                </div>
-
-                {/* Fila de Swatches Cromáticos Circulares */}
-                <div className="mt-4 pt-3 border-t border-stone-200/60 flex items-center justify-between">
-                  <span className="text-[10px] uppercase tracking-wider text-stone-600 font-bold">
-                    Paleta
+                <div className="flex items-center justify-between w-full mb-1.5">
+                  <Icon
+                    className={`h-4 w-4 ${
+                      isActive ? 'text-[#d4af37]' : 'text-stone-400 group-hover:text-stone-700'
+                    }`}
+                  />
+                  <span
+                    className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full ${
+                      isActive
+                        ? 'bg-white/15 text-stone-200 border border-white/20'
+                        : 'bg-stone-100 text-stone-500 border border-stone-200/80'
+                    }`}
+                  >
+                    {tab.badge}
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    {meta.swatches.map((color, idx) => (
-                      <span
-                        key={idx}
-                        title={`Color #${idx + 1}: ${color}`}
-                        className="w-4 h-4 rounded-full border border-stone-300/80 shadow-xs inline-block transition-transform group-hover:scale-110"
-                        style={{ backgroundColor: color }}
-                      />
-                    ))}
-                  </div>
                 </div>
+                <span className="font-semibold text-xs leading-tight block">
+                  {tab.label}
+                </span>
+                <span
+                  className={`text-[10px] mt-0.5 line-clamp-1 ${
+                    isActive ? 'text-stone-300' : 'text-stone-400'
+                  }`}
+                >
+                  {tab.description}
+                </span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Sello de Cera Artesanal 3D & Monograma Parametrizable (Solo Plan Premium) */}
-      {!isClassicPlan && (
-      <>
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-amber-700" />
-            <h4 className="font-semibold text-sm text-stone-900">
-              Sello de Cera Artesanal 3D (Sobre de la Invitación)
-            </h4>
-          </div>
-          <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 font-medium px-2.5 py-0.5 rounded-full">
-            100% Parametrizable
-          </span>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6 items-center">
-          {/* Vista previa 3D en vivo del lacre */}
-          <div className="flex flex-col items-center justify-center p-6 rounded-2xl bg-stone-950/5 border border-stone-200 text-center">
-            <div
-              className="relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl"
-              style={{
-                borderRadius: '50% 50% 49% 51% / 51% 49% 50% 50%',
-                background:
-                  (form.waxSealColor === 'gold' || (!form.waxSealColor && ['CLASSIC_NOCTURNE', 'NOCTURNE_ROYAL', 'GOLDEN_GLAMOUR'].includes(form.theme)))
-                    ? 'radial-gradient(circle at 35% 32%, #fff0b3 0%, #d4af37 40%, #997318 75%, #5a4005 100%)'
-                    : (form.waxSealColor === 'olive' || (!form.waxSealColor && form.theme === 'BOTANICAL_GARDEN'))
-                    ? 'radial-gradient(circle at 35% 32%, #6b8f71 0%, #3d5a42 45%, #253928 80%, #141f16 100%)'
-                    : (form.waxSealColor === 'emerald' || (!form.waxSealColor && form.theme === 'EMERALD_IMPERIAL'))
-                    ? 'radial-gradient(circle at 35% 32%, #10b981 0%, #065f46 45%, #04392a 80%, #021f17 100%)'
-                    : (form.waxSealColor === 'sapphire' || (!form.waxSealColor && form.theme === 'SAPPHIRE_SERENITY'))
-                    ? 'radial-gradient(circle at 35% 32%, #38bdf8 0%, #1e3a8a 45%, #0f172a 80%, #080c18 100%)'
-                    : (form.waxSealColor === 'terracotta' || (!form.waxSealColor && ['TERRACOTTA_SUNSET', 'RUSTIC_CHIC'].includes(form.theme)))
-                    ? 'radial-gradient(circle at 35% 32%, #ea580c 0%, #9a3412 45%, #591d08 80%, #2f0d03 100%)'
-                    : (form.waxSealColor === 'lavender' || (!form.waxSealColor && form.theme === 'LAVENDER_PROVENCE'))
-                    ? 'radial-gradient(circle at 35% 32%, #c084fc 0%, #7e22ce 45%, #4c1d95 80%, #260a52 100%)'
-                    : (form.waxSealColor === 'graphite' || (!form.waxSealColor && form.theme === 'MINIMAL_LUXURY'))
-                    ? 'radial-gradient(circle at 35% 32%, #64748b 0%, #334155 45%, #1e293b 80%, #0f172a 100%)'
-                    : 'radial-gradient(circle at 35% 32%, #b52236 0%, #7d0d1d 45%, #4f0611 80%, #290308 100%)',
-                boxShadow: '0 10px 24px -4px rgba(0,0,0,0.5), inset 0 2px 4px rgba(255,255,255,0.4), inset 0 -4px 6px rgba(0,0,0,0.7)',
-              }}
-            >
-              <div
-                className="w-14 h-14 rounded-full flex items-center justify-center border border-white/30"
-                style={{
-                  border: '1.5px dashed rgba(255,255,255,0.4)',
-                  boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.55), 0 1px 2px rgba(255,255,255,0.25)',
-                }}
-              >
-                <span
-                  className="font-serif text-xl font-bold tracking-tight text-white select-none"
-                  style={{ textShadow: '-1px -1px 1px rgba(255,255,255,0.35), 1px 1px 2px rgba(0,0,0,0.95)' }}
-                >
-                  {(form.waxSealMonogram || 'S&J').includes('&') ? (
-                    <>
-                      <span>{(form.waxSealMonogram || 'S&J').split('&')[0].trim()}</span>
-                      <span className="text-xs font-light mx-0.5 italic opacity-90">&amp;</span>
-                      <span>{(form.waxSealMonogram || 'S&J').split('&')[1].trim()}</span>
-                    </>
-                  ) : (
-                    form.waxSealMonogram || 'S&J'
-                  )}
+      {/* Contenido de la Sub-Pestaña Activa */}
+      {/* 1. PAQUETE & ESTILO */}
+      {activeSubTab === 'PACKAGE_STYLE' && (
+        <div className="space-y-6">
+          {/* Selector de Nivel de Plan de la Boda (Solo SuperAdmin en bodas directas B2C) */}
+          {canChangePlan && (
+            <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-200/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <Crown className="h-5 w-5 text-amber-700" />
+                  <div>
+                    <h4 className="font-semibold text-sm text-stone-900">
+                      Nivel de Plan &amp; Servicios Habilitados de la Boda (Exclusivo SuperAdmin - Boda Directa)
+                    </h4>
+                    <p className="text-xs text-stone-500">
+                      Selecciona el paquete contratado por esta pareja (Clásico o Premium). Los Wedding Planners no ven esta opción y tienen siempre Plan Premium completo.
+                    </p>
+                  </div>
+                </div>
+                <span className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                  Plan Actual: <strong className="uppercase">{form.planTier === 'CLASSIC' ? 'Clásico' : 'Premium'}</strong>
                 </span>
               </div>
-            </div>
-            <p className="text-[11px] text-stone-500 mt-3 font-medium">
-              Vista previa del grabado en el sobre
-            </p>
-          </div>
 
-          {/* Opciones y controles de edición */}
-          <div className="md:col-span-2 space-y-3">
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 mb-1">
-                Monograma de los Novios (Grabado en Relieve)
-              </label>
-              <input
-                type="text"
-                maxLength={8}
-                value={form.waxSealMonogram}
-                onChange={(e) => setForm((p) => ({ ...p, waxSealMonogram: e.target.value }))}
-                placeholder="Ej. S&J"
-                className="w-full rounded-xl border border-stone-300 px-3.5 py-2.5 text-base font-serif font-bold text-stone-900 tracking-wider"
-              />
-              <p className="text-[11px] text-stone-500 mt-1">
-                Puedes colocar <strong>S&amp;J</strong>, <strong>J&amp;S</strong> o el monograma que prefieras para sellar el sobre de gala.
-              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Plan Clásico */}
+                <div
+                  onClick={() => setForm((p) => ({ ...p, planTier: 'CLASSIC' }))}
+                  className={`cursor-pointer rounded-2xl border-2 p-5 transition-all relative ${
+                    form.planTier === 'CLASSIC'
+                      ? 'border-stone-900 bg-stone-50/80 shadow-md ring-1 ring-stone-900'
+                      : 'border-stone-200 hover:border-stone-300 bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider text-stone-500">
+                      <ShieldCheck className="h-3.5 w-3.5 text-stone-600" />
+                      Plan Clásico
+                    </span>
+                    <div className="text-right">
+                      <span className="text-[10px] line-through text-stone-400 mr-1.5">$99</span>
+                      <span className="text-sm font-bold text-stone-900">$75 USD</span>
+                      <span className="block text-[9px] text-emerald-700 font-medium">Promo: $69 USD (6 meses activa)</span>
+                    </div>
+                  </div>
+                  <h5 className="font-serif text-lg font-medium text-stone-900 mb-1">Clásico Editorial</h5>
+                  <p className="text-xs text-stone-500 mb-3 leading-relaxed">
+                    Invitación web limpia y directa (abre sin sobre 3D). Vigencia de hasta 6 meses (5 meses antes + 1 mes post-boda).
+                  </p>
+                  <ul className="text-[11px] text-stone-600 space-y-1.5 pt-2 border-t border-stone-200/60 font-sans">
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <span>Cuenta regresiva, Google Maps y calendario (.ICS)</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+                      <span>Confirmación RSVP estándar, código de vestimenta y regalos</span>
+                    </li>
+                    <li className="flex items-center gap-1.5 text-stone-400">
+                      <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
+                      <span>Sin envíos por WhatsApp/Gmail ni pases QR</span>
+                    </li>
+                    <li className="flex items-center gap-1.5 text-stone-400">
+                      <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
+                      <span>Sin sobre 3D, música de fondo ni playlist Spotify</span>
+                    </li>
+                    <li className="flex items-center gap-1.5 text-stone-400">
+                      <X className="h-3.5 w-3.5 text-stone-300 shrink-0" />
+                      <span>Sin pétalos 3D, galería, mesas ni álbum QR</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* Plan Premium */}
+                <div
+                  onClick={() => setForm((p) => ({ ...p, planTier: 'PREMIUM' }))}
+                  className={`cursor-pointer rounded-2xl border-2 p-5 transition-all relative ${
+                    form.planTier === 'PREMIUM'
+                      ? 'border-[#b08d57] bg-amber-50/40 shadow-md ring-1 ring-[#b08d57]'
+                      : 'border-stone-200 hover:border-amber-300 bg-white'
+                  }`}
+                >
+                  <div className="absolute -top-2.5 right-4 rounded-full bg-gradient-to-r from-amber-600 to-amber-700 px-2.5 py-0.5 text-[10px] font-bold uppercase text-white shadow-xs">
+                    Todo Incluido • Más Elegido
+                  </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                      Plan Premium (Parejas &amp; Planners)
+                    </span>
+                    <div className="text-right">
+                      <span className="text-[10px] line-through text-stone-400 mr-1.5">$149</span>
+                      <span className="text-sm font-bold text-amber-900">$109 USD</span>
+                      <span className="block text-[9px] text-amber-700 font-medium">Promo: $99 USD (6 meses activa)</span>
+                    </div>
+                  </div>
+                  <h5 className="font-serif text-lg font-medium text-stone-900 mb-1">Experiencia Completa</h5>
+                  <p className="text-xs text-stone-500 mb-3 leading-relaxed">
+                    100% de funciones interactivas, WhatsApp QR y fotos en Google Drive del cliente. Vigencia 6 meses (+$15 por 3 meses extra).
+                  </p>
+                  <ul className="text-[11px] text-stone-700 space-y-1.5 pt-2 border-t border-amber-200/60 font-sans">
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                      <span>Sobre 3D animado con monograma &amp; lacre personalizado</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                      <span>Música de fondo &amp; reproductor Spotify + Pétalos 3D</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                      <span>Galería prenupcial, Seating Plan de mesas y Muro de deseos</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                      <span>Álbum QR conectado al Google Photos / Drive del cliente</span>
+                    </li>
+                    <li className="flex items-center gap-1.5">
+                      <Check className="h-3.5 w-3.5 text-[#b08d57] shrink-0" />
+                      <span>Difusión masiva por WhatsApp &amp; Pase QR por familia</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Selector de 12 Paletas y Diseños de Gala */}
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Palette className="h-4 w-4 text-amber-700" />
+                <h4 className="font-semibold text-sm text-stone-900">
+                  Paletas de Color &amp; Diseños de Gala (12 Estilos Exclusivos)
+                </h4>
+              </div>
+              <span className="text-xs text-stone-500 font-medium">
+                Selecciona el tema visual para la invitación y el sobre
+              </span>
             </div>
 
-            <div className="flex flex-wrap gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, waxSealMonogram: 'S&J' }))}
-                className="rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-900 transition"
-              >
-                Poner &quot;S&amp;J&quot; (Santiago &amp; Joselin)
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm((p) => ({ ...p, waxSealMonogram: 'J&S' }))}
-                className="rounded-lg border border-stone-300 bg-stone-50 hover:bg-stone-100 px-3 py-1.5 text-xs font-medium text-stone-700 transition"
-              >
-                Poner &quot;J&amp;S&quot; (Joselin &amp; Santiago)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const p1 = (form.partnerOneName?.[0] || 'S').toUpperCase();
-                  const p2 = (form.partnerTwoName?.[0] || 'J').toUpperCase();
-                  setForm((p) => ({ ...p, waxSealMonogram: `${p1}&${p2}` }));
-                }}
-                className="rounded-lg border border-stone-200 bg-white hover:bg-stone-50 px-3 py-1.5 text-xs text-stone-600 transition"
-              >
-                Iniciales automáticas
-              </button>
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {(Object.keys(THEME_METADATA) as EventTheme[]).map((themeKey) => {
+                const meta = THEME_METADATA[themeKey];
+                const selected = form.theme === themeKey;
+                return (
+                  <button
+                    key={themeKey}
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, theme: themeKey }))}
+                    className={`group text-left rounded-2xl border-2 p-4 transition-all duration-200 relative overflow-hidden flex flex-col justify-between ${
+                      selected
+                        ? 'border-amber-600 bg-amber-50/50 shadow-md ring-2 ring-amber-600/20'
+                        : 'border-stone-200 hover:border-stone-300 hover:bg-stone-50/50'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-stone-100 text-stone-700 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider">
+                          {meta.category}
+                        </span>
+                        {selected && (
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                            <Check className="h-3 w-3" /> Activo
+                          </span>
+                        )}
+                      </div>
+                      <h5 className="font-semibold text-sm text-stone-900 group-hover:text-amber-900 transition-colors">
+                        {meta.label}
+                      </h5>
+                      <p className="text-xs text-stone-600 mt-1 leading-relaxed">
+                        {meta.description}
+                      </p>
+                    </div>
+
+                    {/* Fila de Swatches Cromáticos Circulares */}
+                    <div className="mt-4 pt-3 border-t border-stone-200/60 flex items-center justify-between">
+                      <span className="text-[10px] uppercase tracking-wider text-stone-600 font-bold">
+                        Paleta
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {meta.swatches.map((color, idx) => (
+                          <span
+                            key={idx}
+                            title={`Color #${idx + 1}: ${color}`}
+                            className="w-4 h-4 rounded-full border border-stone-300/80 shadow-xs inline-block transition-transform group-hover:scale-110"
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* 2. SOBRE 3D & ATMÓSFERA */}
+      {activeSubTab === 'ENVELOPE_ATMOSPHERE' && (
+        <div className="space-y-6">
+          {isClassicPlan && (
+            <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-3">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 text-amber-700 mx-auto">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <h4 className="font-serif text-lg font-medium text-stone-900">
+                Sobre 3D &amp; Efectos Ambientales Exclusivos de Plan Premium
+              </h4>
+              <p className="text-xs text-stone-500 max-w-lg mx-auto leading-relaxed">
+                Esta boda se encuentra actualmente configurada en <strong>Plan Clásico Editorial</strong>. En este paquete la invitación abre de forma directa y minimalista sin sobre 3D animado ni lluvia de partículas.
+              </p>
+              {canChangePlan && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((p) => ({ ...p, planTier: 'PREMIUM' }));
+                    setActiveSubTab('PACKAGE_STYLE');
+                    toast.success('Cambia el paquete a Plan Premium para habilitar el Sobre 3D');
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 text-xs font-semibold shadow-xs transition"
+                >
+                  <Crown className="h-3.5 w-3.5" />
+                  <span>Activar Plan Premium para esta Boda</span>
+                </button>
+              )}
+            </div>
+          )}
+
+      {/* Sobre de Gala 3D, Colecciones de Papelería & Sello de Cera (Solo Plan Premium) */}
+      {!isClassicPlan && (
+      <>
+      {(() => {
+        const currentEnvelopeConfig = getEnvelopeStyleConfig(form.envelopeStyle);
+        const sealColor = form.waxSealColor || currentEnvelopeConfig.recommendedSealColor || 'burgundy';
+        const WAX_SEAL_PALETTE = [
+          { id: 'burgundy', label: 'Borgoña Vino', bg: 'radial-gradient(circle at 35% 32%, #b52236 0%, #7d0d1d 45%, #4f0611 80%, #290308 100%)' },
+          { id: 'gold', label: 'Oro Real', bg: 'radial-gradient(circle at 35% 32%, #fff0b3 0%, #d4af37 40%, #997318 75%, #5a4005 100%)' },
+          { id: 'olive', label: 'Verde Olivo', bg: 'radial-gradient(circle at 35% 32%, #6b8f71 0%, #3d5a42 45%, #253928 80%, #141f16 100%)' },
+          { id: 'emerald', label: 'Esmeralda', bg: 'radial-gradient(circle at 35% 32%, #10b981 0%, #065f46 45%, #04392a 80%, #021f17 100%)' },
+          { id: 'sapphire', label: 'Azul Zafiro', bg: 'radial-gradient(circle at 35% 32%, #38bdf8 0%, #1e3a8a 45%, #0f172a 80%, #080c18 100%)' },
+          { id: 'terracotta', label: 'Terracota', bg: 'radial-gradient(circle at 35% 32%, #ea580c 0%, #9a3412 45%, #591d08 80%, #2f0d03 100%)' },
+          { id: 'lavender', label: 'Lavanda', bg: 'radial-gradient(circle at 35% 32%, #c084fc 0%, #7e22ce 45%, #4c1d95 80%, #260a52 100%)' },
+          { id: 'graphite', label: 'Grafito', bg: 'radial-gradient(circle at 35% 32%, #64748b 0%, #334155 45%, #1e293b 80%, #0f172a 100%)' },
+        ];
+        const activeSealObj = WAX_SEAL_PALETTE.find((s) => s.id === sealColor) || WAX_SEAL_PALETTE[0];
+
+        return (
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-4">
+              <div className="flex items-center gap-2">
+                <Mail className="h-5 w-5 text-amber-700" />
+                <div>
+                  <h4 className="font-semibold text-sm text-stone-900">
+                    Sobre de Gala 3D, Texturas &amp; Sello de Cera Artesanal
+                  </h4>
+                  <p className="text-xs text-stone-500">
+                    Elige el estilo de papelería nupcial, el corte de solapa, el forro interior y el monograma en relieve
+                  </p>
+                </div>
+              </div>
+              <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 font-medium px-2.5 py-0.5 rounded-full">
+                6 Colecciones de Gala
+              </span>
+            </div>
+
+            {/* Fila Principal: Preview 3D del Sobre en Tiempo Real + Selector de Corte y Monograma */}
+            <div className="grid lg:grid-cols-12 gap-6 items-center">
+              {/* Preview 3D del Sobre Completo a Escala */}
+              <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-[#090807] border border-stone-800 text-center relative overflow-hidden shadow-2xl">
+                {/* Resplandor cálido de fondo */}
+                <div
+                  className="absolute -top-12 -left-12 w-48 h-48 rounded-full blur-3xl opacity-30 pointer-events-none"
+                  style={{ backgroundColor: currentEnvelopeConfig.swatch.foil }}
+                />
+
+                <div
+                  className="relative w-64 sm:w-72 h-44 rounded-xl shadow-2xl overflow-hidden border transition-all duration-500"
+                  style={{
+                    borderColor: `${currentEnvelopeConfig.foilColor}60`,
+                    background: currentEnvelopeConfig.linerBackground,
+                  }}
+                >
+                  {/* Forro interior visible */}
+                  <div
+                    className="absolute inset-1 rounded-lg opacity-40 pointer-events-none"
+                    style={{
+                      backgroundImage: `url("${currentEnvelopeConfig.linerPatternSvg}")`,
+                      backgroundRepeat: 'repeat',
+                    }}
+                  />
+
+                  {/* Solapas Frontales (Laterales e Inferior) */}
+                  <div className="absolute inset-0 pointer-events-none">
+                    {/* Solapa Izquierda */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        clipPath: 'polygon(0% 0%, 50% 56%, 0% 100%)',
+                        background: currentEnvelopeConfig.leftFlapGradient,
+                      }}
+                    />
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <line x1="0" y1="0" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
+                      <line x1="50" y1="56" x2="0" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
+                    </svg>
+
+                    {/* Solapa Derecha */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        clipPath: 'polygon(100% 0%, 50% 56%, 100% 100%)',
+                        background: currentEnvelopeConfig.rightFlapGradient,
+                      }}
+                    />
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <line x1="100" y1="0" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
+                      <line x1="50" y1="56" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
+                    </svg>
+
+                    {/* Solapa Inferior */}
+                    <div
+                      className="absolute inset-0"
+                      style={{
+                        clipPath: 'polygon(0% 100%, 50% 56%, 100% 100%)',
+                        background: currentEnvelopeConfig.bottomFlapGradient,
+                      }}
+                    />
+                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <line x1="0" y1="100" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
+                      <line x1="50" y1="56" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
+                    </svg>
+                  </div>
+
+                  {/* Solapa Superior con Corte Seleccionado */}
+                  <div
+                    className="absolute top-0 left-0 right-0"
+                    style={{
+                      height: form.envelopeFlap === 'BARONIAL_ROUND' ? '54%' : form.envelopeFlap === 'DIAMOND_PEAK' ? '50%' : '56%',
+                      clipPath: form.envelopeFlap === 'BARONIAL_ROUND'
+                        ? 'polygon(0% 0%, 100% 0%, 94% 65%, 50% 100%, 6% 65%)'
+                        : 'polygon(0% 0%, 100% 0%, 50% 100%)',
+                      background: currentEnvelopeConfig.topFlapGradient,
+                      filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.4))',
+                    }}
+                  >
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      <polygon
+                        points={form.envelopeFlap === 'BARONIAL_ROUND' ? '0,0 100,0 94,65 50,100 6,65' : '0,0 100,0 50,100'}
+                        fill="none"
+                        stroke={currentEnvelopeConfig.foilColor}
+                        strokeWidth="1.6"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </svg>
+                  </div>
+
+                  {/* Sello de Cera 3D Miniatura */}
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300"
+                    style={{
+                      top: form.envelopeFlap === 'DIAMOND_PEAK' ? '50%' : form.envelopeFlap === 'BARONIAL_ROUND' ? '54%' : '56%',
+                      borderRadius: '50% 50% 49% 51% / 51% 49% 50% 50%',
+                      background: activeSealObj.bg,
+                      boxShadow: `0 10px 20px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.4), inset 0 -3px 5px rgba(0,0,0,0.7), 0 0 15px ${currentEnvelopeConfig.foilColor}40`,
+                    }}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-full flex items-center justify-center border border-dashed border-white/40"
+                      style={{
+                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)',
+                      }}
+                    >
+                      <span
+                        className="font-serif text-xs font-bold tracking-tight text-white select-none"
+                        style={{ textShadow: '-1px -1px 1px rgba(255,255,255,0.3), 1px 1px 2px rgba(0,0,0,0.9)' }}
+                      >
+                        {form.waxSealMonogram || 'S&J'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Botón miniatura "Abrir Invitación" */}
+                  <div
+                    className={`absolute bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap inline-flex items-center gap-1 px-3 py-1 rounded-full ${currentEnvelopeConfig.buttonStyle.bg} ${currentEnvelopeConfig.buttonStyle.text} text-[9px] font-sans font-semibold tracking-wider uppercase border ${currentEnvelopeConfig.buttonStyle.border} shadow-lg`}
+                  >
+                    <Sparkles className={`w-2.5 h-2.5 ${currentEnvelopeConfig.buttonStyle.icon}`} />
+                    <span>{form.openEnvelopeLabel || 'Abrir Invitación'}</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 text-center">
+                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
+                    <span>{currentEnvelopeConfig.name}</span>
+                  </div>
+                  <p className="text-[11px] text-stone-400 mt-1 max-w-xs leading-relaxed">
+                    {currentEnvelopeConfig.subtitle} • {ENVELOPE_FLAP_OPTIONS.find((f) => f.id === form.envelopeFlap)?.label}
+                  </p>
+                </div>
+              </div>
+
+              {/* Controles de Corte de Solapa, Monograma y Lacre */}
+              <div className="lg:col-span-7 space-y-4">
+                {/* 1. Selector de Corte de Solapa */}
+                <div>
+                  <label className="block text-xs font-semibold text-stone-800 mb-1.5">
+                    1. Corte de la Solapa (Flap Cut)
+                  </label>
+                  <div className="grid sm:grid-cols-3 gap-2">
+                    {ENVELOPE_FLAP_OPTIONS.map((flap) => {
+                      const isSelected = form.envelopeFlap === flap.id;
+                      return (
+                        <button
+                          key={flap.id}
+                          type="button"
+                          onClick={() => setForm((p) => ({ ...p, envelopeFlap: flap.id }))}
+                          className={`text-left p-3 rounded-xl border text-xs transition ${
+                            isSelected
+                              ? 'border-amber-600 bg-amber-50/70 font-semibold text-amber-950 shadow-xs'
+                              : 'border-stone-200 bg-stone-50/60 hover:bg-stone-100 text-stone-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-sm">{flap.icon}</span>
+                            {isSelected && <Check className="h-3.5 w-3.5 text-amber-700" />}
+                          </div>
+                          <div className="font-medium text-[11px] mt-1 leading-snug">{flap.label}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Monograma de los Novios */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-stone-800">
+                      2. Monograma Grabado en el Sello
+                    </label>
+                    <span className="text-[11px] text-stone-500">Máx 8 caracteres</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      maxLength={8}
+                      value={form.waxSealMonogram}
+                      onChange={(e) => setForm((p) => ({ ...p, waxSealMonogram: e.target.value }))}
+                      placeholder="Ej. S&J"
+                      className="w-32 rounded-xl border border-stone-300 px-3 py-2 text-sm font-serif font-bold text-stone-900 tracking-wider text-center"
+                    />
+                    <div className="flex flex-wrap gap-1.5 flex-1">
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, waxSealMonogram: 'S&J' }))}
+                        className="rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 text-[11px] font-medium text-amber-900 transition"
+                      >
+                        S&amp;J
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, waxSealMonogram: 'J&S' }))}
+                        className="rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 px-2.5 py-1.5 text-[11px] font-medium text-stone-700 transition"
+                      >
+                        J&amp;S
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const p1 = (form.partnerOneName?.[0] || 'S').toUpperCase();
+                          const p2 = (form.partnerTwoName?.[0] || 'J').toUpperCase();
+                          setForm((p) => ({ ...p, waxSealMonogram: `${p1}&${p2}` }));
+                        }}
+                        className="rounded-lg border border-stone-200 bg-white hover:bg-stone-50 px-2.5 py-1.5 text-[11px] text-stone-600 transition"
+                      >
+                        Iniciales automáticas
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 3. Color del Lacre de Cera Artesanal */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-stone-800">
+                      3. Color del Sello de Cera (Lacre)
+                    </label>
+                    <span className="text-[11px] text-stone-500 capitalize">
+                      {activeSealObj.label}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {WAX_SEAL_PALETTE.map((seal) => {
+                      const isSelected = sealColor === seal.id;
+                      return (
+                        <button
+                          key={seal.id}
+                          type="button"
+                          onClick={() => setForm((p) => ({ ...p, waxSealColor: seal.id }))}
+                          title={seal.label}
+                          className={`relative w-8 h-8 rounded-full transition-transform ${
+                            isSelected ? 'scale-110 ring-2 ring-amber-600 ring-offset-2' : 'hover:scale-105 opacity-85'
+                          }`}
+                          style={{
+                            background: seal.bg,
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                          }}
+                        >
+                          {isSelected && (
+                            <Check className="h-3.5 w-3.5 text-white absolute inset-0 m-auto drop-shadow" />
+                          )}
+                        </button>
+                      );
+                    })}
+                    {form.waxSealColor && (
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, waxSealColor: '' }))}
+                        className="text-[11px] text-stone-400 hover:text-stone-700 underline ml-1"
+                      >
+                        Reset a automático
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Selector de Colecciones de Sobre (6 Estilos de Lujo) */}
+            <div className="pt-3 border-t border-stone-100">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-3">
+                Colección de Papelería &amp; Estilo de Sobre
+              </label>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {ENVELOPE_STYLES.map((style) => {
+                  const isSelected = form.envelopeStyle === style.id;
+                  return (
+                    <button
+                      key={style.id}
+                      type="button"
+                      onClick={() => {
+                        setForm((p) => ({
+                          ...p,
+                          envelopeStyle: style.id,
+                          // Si no tiene color de lacre forzado, sugerir el color de gala del sobre
+                          waxSealColor: p.waxSealColor ? p.waxSealColor : style.recommendedSealColor,
+                        }));
+                      }}
+                      className={`text-left p-4 rounded-2xl border-2 transition relative flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-amber-600 bg-amber-50/40 shadow-sm ring-1 ring-amber-600/30'
+                          : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/50'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-stone-100 text-stone-700">
+                            {style.badge}
+                          </span>
+                          {isSelected && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                              <Check className="h-3 w-3" /> Activo
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="font-serif font-bold text-stone-900 text-sm mt-1">
+                          {style.name}
+                        </div>
+                        <div className="text-[11px] font-medium text-amber-800/90 mt-0.5">
+                          {style.subtitle}
+                        </div>
+                        <p className="text-[11px] text-stone-500 mt-1 leading-snug line-clamp-2">
+                          {style.description}
+                        </p>
+                      </div>
+
+                      {/* Muestra Cromática del Sobre (Papel, Sombra y Foil) */}
+                      <div className="flex items-center gap-2 pt-3 mt-3 border-t border-stone-100">
+                        <span className="text-[10px] text-stone-400 font-medium">Acabados:</span>
+                        <div className="flex items-center -space-x-1">
+                          <div
+                            className="w-4 h-4 rounded-full border border-white shadow-xs"
+                            title="Color de papel"
+                            style={{ backgroundColor: style.swatch.primary }}
+                          />
+                          <div
+                            className="w-4 h-4 rounded-full border border-white shadow-xs"
+                            title="Tono secundario"
+                            style={{ backgroundColor: style.swatch.secondary }}
+                          />
+                          <div
+                            className="w-4 h-4 rounded-full border border-white shadow-xs ring-1 ring-amber-400/50"
+                            title="Foil metálico"
+                            style={{ backgroundColor: style.swatch.foil }}
+                          />
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Atmósfera Visual: Partículas Ambientales y Fondo Limpio */}
       <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-6">
@@ -1394,240 +1806,13 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
           </div>
         )}
       </div>
-
-      {/* Destino de Fotos / Videos / Archivos (Google Photos vs Drive vs Híbrido) */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <HardDrive className="h-4 w-4 text-amber-700" />
-            <h4 className="font-semibold text-sm text-stone-900">
-              Destino de Carga QR (Google Photos / Google Drive)
-            </h4>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowDriveModal(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-stone-50 hover:bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 transition"
-          >
-            <FolderOpen className="h-3.5 w-3.5 text-amber-700" />
-            <span>Configuración Avanzada & Vincular Google</span>
-          </button>
-        </div>
-        <div className="grid md:grid-cols-3 gap-3">
-          {[
-            {
-              id: 'GOOGLE_PHOTOS',
-              title: 'Google Photos',
-              desc: 'Fotos y videos directo a un álbum en tu Google Photos.',
-            },
-            {
-              id: 'GOOGLE_DRIVE',
-              title: 'Google Drive',
-              desc: 'Fotos, videos y cualquier tipo de archivo en una carpeta de Drive.',
-            },
-            {
-              id: 'HYBRID',
-              title: 'Híbrido (Photos + Drive)',
-              desc: 'Fotos y videos van a Google Photos; otros archivos van a Google Drive.',
-            },
-          ].map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() =>
-                setForm((p) => ({ ...p, mediaProvider: opt.id as MediaProviderType }))
-              }
-              className={`text-left rounded-2xl border-2 p-4 transition ${
-                form.mediaProvider === opt.id
-                  ? 'border-amber-600 bg-amber-50/40'
-                  : 'border-stone-200 hover:border-stone-300'
-              }`}
-            >
-              <div className="font-semibold text-sm text-stone-900">{opt.title}</div>
-              <p className="text-xs text-stone-600 mt-1">{opt.desc}</p>
-            </button>
-          ))}
-        </div>
-
-        <div className="grid sm:grid-cols-2 gap-3 pt-2">
-          <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">
-              URL del Álbum de Google Photos (Recomendado para QR)
-            </label>
-            <input
-              type="url"
-              value={form.photosAlbumUrl}
-              onChange={(e) => {
-                const val = e.target.value;
-                setForm((p) => ({
-                  ...p,
-                  photosAlbumUrl: val,
-                  photosAlbumId: val && !val.startsWith('http') ? val : p.photosAlbumId,
-                }));
-              }}
-              placeholder="https://photos.app.goo.gl/... o https://photos.google.com/share/..."
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs font-mono"
-            />
-            <p className="text-[11px] text-stone-500 mt-1">
-              Al colocar tu enlace aquí, el código QR de las mesas y los botones de la invitación llevarán directamente a los invitados a este álbum.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-stone-700 mb-1">
-              URL de Carpeta en Google Drive (Opcional)
-            </label>
-            <input
-              type="url"
-              value={form.driveFolderUrl}
-              onChange={(e) => {
-                const val = e.target.value;
-                setForm((p) => ({
-                  ...p,
-                  driveFolderUrl: val,
-                  driveFolderId: val && !val.startsWith('http') ? val : p.driveFolderId,
-                }));
-              }}
-              placeholder="https://drive.google.com/drive/folders/..."
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs font-mono"
-            />
-            <p className="text-[11px] text-stone-500 mt-1">
-              Enlace directo si prefieres que los invitados abran una carpeta compartida de Google Drive.
-            </p>
-          </div>
-        </div>
-
-        <div className="grid sm:grid-cols-3 gap-3 pt-2">
-          <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">
-              ID Álbum Google Photos (Avanzado)
-            </label>
-            <input
-              type="text"
-              value={form.photosAlbumId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setForm((p) => ({
-                  ...p,
-                  photosAlbumId: val,
-                  photosAlbumUrl: val.startsWith('http') ? val : p.photosAlbumUrl,
-                }));
-              }}
-              placeholder="Se crea automáticamente al subir"
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">
-              ID Carpeta Google Drive (Avanzado)
-            </label>
-            <input
-              type="text"
-              value={form.driveFolderId}
-              onChange={(e) => {
-                const val = e.target.value;
-                setForm((p) => ({
-                  ...p,
-                  driveFolderId: val,
-                  driveFolderUrl: val.startsWith('http') ? val : p.driveFolderUrl,
-                }));
-              }}
-              placeholder="Ej. 1AbCdeFGhIjK..."
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-stone-600 mb-1">
-              PIN del Álbum QR (Opcional)
-            </label>
-            <input
-              type="text"
-              value={form.photoPin}
-              onChange={(e) => setForm((p) => ({ ...p, photoPin: e.target.value }))}
-              placeholder="Vacío = acceso libre"
-              className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
-            />
-          </div>
-        </div>
-      </div>
-      </>
+        </>
       )}
+    </div>
+  )}
 
-      {/* Toggles de Secciones */}
-      <div className="bg-white rounded-2xl border border-stone-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Sliders className="h-4 w-4 text-amber-700" />
-          <h4 className="font-semibold text-sm text-stone-900">
-            Secciones Visibles en la Invitación
-          </h4>
-        </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {SECTION_LABELS.filter((item) =>
-            isClassicPlan
-              ? !['heroMusic', 'storyGallery', 'spotifyPlaylist', 'wishesWall', 'photoWall'].includes(item.key)
-              : true
-          ).map((item) => {
-            const enabled = Boolean(form.sectionsConfig[item.key]);
-            return (
-              <label
-                key={item.key}
-                className={`flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition ${
-                  enabled ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200 bg-stone-50/50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={enabled}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      sectionsConfig: { ...prev.sectionsConfig, [item.key]: e.target.checked },
-                    }))
-                  }
-                  className="mt-1 h-4 w-4 accent-emerald-600"
-                />
-                <div>
-                  <div className="text-sm font-medium text-stone-900">{item.label}</div>
-                  <div className="text-xs text-stone-500">{item.desc}</div>
-                </div>
-              </label>
-            );
-          })}
-        </div>
-
-        <div className="grid sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-stone-100">
-          <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={form.isPrimary}
-              onChange={(e) => setForm((p) => ({ ...p, isPrimary: e.target.checked }))}
-            />
-            Mostrar este evento en la portada principal (/)
-          </label>
-          {!isClassicPlan && (
-            <>
-              <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.moderatePhotos}
-                  onChange={(e) => setForm((p) => ({ ...p, moderatePhotos: e.target.checked }))}
-                />
-                Moderar fotos/videos antes de mostrarlos en el muro
-              </label>
-              <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.moderateWishes}
-                  onChange={(e) => setForm((p) => ({ ...p, moderateWishes: e.target.checked }))}
-                />
-                Moderar buenos deseos antes de publicarlos
-              </label>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Datos Principales & Ubicaciones */}
+      {/* 3. DATOS & UBICACIONES */}
+      {activeSubTab === 'EVENT_LOCATIONS' && (
       <div className="bg-white rounded-2xl border border-stone-200 p-6 grid md:grid-cols-2 gap-4">
         <div>
           <label className="block text-xs font-medium text-stone-600 mb-1">Nombre Novia / Pareja 1</label>
@@ -1833,11 +2018,45 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
             </div>
           )}
         </div>
+      </div>
+      )}
 
-        {/* MÚSICA DE FONDO, PLAYLIST SPOTIFY Y GALERÍA PRENUPCIAL (Solo Plan Premium) */}
-        {!isClassicPlan && (
-          <>
-            <div className="space-y-2">
+      {/* 4. MÚSICA & MULTIMEDIA */}
+      {activeSubTab === 'MUSIC_MULTIMEDIA' && (
+        <div className="space-y-6">
+          {isClassicPlan && (
+            <div className="bg-white rounded-2xl border border-stone-200 p-8 text-center space-y-3">
+              <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-amber-50 text-amber-700 mx-auto">
+                <Music className="h-6 w-6" />
+              </div>
+              <h4 className="font-serif text-lg font-medium text-stone-900">
+                Música, Galería &amp; Álbum Digital Exclusivos de Plan Premium
+              </h4>
+              <p className="text-xs text-stone-500 max-w-lg mx-auto leading-relaxed">
+                Esta boda se encuentra en <strong>Plan Clásico Editorial</strong>. Las funciones multimedia avanzadas (música de fondo en vivo, reproductor interactivo de Spotify, galería prenupcial y recolección de fotos QR en Google Photos / Google Drive) están reservadas para el <strong>Plan Premium</strong>.
+              </p>
+              {canChangePlan && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setForm((p) => ({ ...p, planTier: 'PREMIUM' }));
+                    setActiveSubTab('PACKAGE_STYLE');
+                    toast.success('Cambia el paquete a Plan Premium para habilitar Multimedia');
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white px-4 py-2 text-xs font-semibold shadow-xs transition"
+                >
+                  <Crown className="h-3.5 w-3.5" />
+                  <span>Activar Plan Premium para esta Boda</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {!isClassicPlan && (
+            <>
+              {/* Card Música de Fondo, Playlist Spotify y Galería Prenupcial */}
+              <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-6">
+                <div className="space-y-2">
               {(() => {
                 const parsedAudio = parseAudioSource(form.musicUrl);
                 return (
@@ -2019,9 +2238,244 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                 );
               })()}
             </div>
-          </>
-        )}
-      </div>
+          </div>
+
+              {/* Destino de Fotos / Videos / Archivos (Google Photos vs Drive vs Híbrido) */}
+              <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <HardDrive className="h-4 w-4 text-amber-700" />
+                    <h4 className="font-semibold text-sm text-stone-900">
+                      Destino de Carga QR (Google Photos / Google Drive)
+                    </h4>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowDriveModal(true)}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-stone-300 bg-stone-50 hover:bg-stone-100 px-3 py-1.5 text-xs font-semibold text-stone-700 transition"
+                  >
+                    <FolderOpen className="h-3.5 w-3.5 text-amber-700" />
+                    <span>Configuración Avanzada &amp; Vincular Google</span>
+                  </button>
+                </div>
+                <div className="grid md:grid-cols-3 gap-3">
+                  {[
+                    {
+                      id: 'GOOGLE_PHOTOS',
+                      title: 'Google Photos',
+                      desc: 'Fotos y videos directo a un álbum en tu Google Photos.',
+                    },
+                    {
+                      id: 'GOOGLE_DRIVE',
+                      title: 'Google Drive',
+                      desc: 'Fotos, videos y cualquier tipo de archivo en una carpeta de Drive.',
+                    },
+                    {
+                      id: 'HYBRID',
+                      title: 'Híbrido (Photos + Drive)',
+                      desc: 'Fotos y videos van a Google Photos; otros archivos van a Google Drive.',
+                    },
+                  ].map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() =>
+                        setForm((p) => ({ ...p, mediaProvider: opt.id as MediaProviderType }))
+                      }
+                      className={`text-left rounded-2xl border-2 p-4 transition ${
+                        form.mediaProvider === opt.id
+                          ? 'border-amber-600 bg-amber-50/40'
+                          : 'border-stone-200 hover:border-stone-300'
+                      }`}
+                    >
+                      <div className="font-semibold text-sm text-stone-900">{opt.title}</div>
+                      <p className="text-xs text-stone-600 mt-1">{opt.desc}</p>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      URL del Álbum de Google Photos (Recomendado para QR)
+                    </label>
+                    <input
+                      type="url"
+                      value={form.photosAlbumUrl}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm((p) => ({
+                          ...p,
+                          photosAlbumUrl: val,
+                          photosAlbumId: val && !val.startsWith('http') ? val : p.photosAlbumId,
+                        }));
+                      }}
+                      placeholder="https://photos.app.goo.gl/... o https://photos.google.com/share/..."
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-stone-500 mt-1">
+                      Al colocar tu enlace aquí, el código QR de las mesas y los botones de la invitación llevarán directamente a los invitados a este álbum.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-stone-700 mb-1">
+                      URL de Carpeta en Google Drive (Opcional)
+                    </label>
+                    <input
+                      type="url"
+                      value={form.driveFolderUrl}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm((p) => ({
+                          ...p,
+                          driveFolderUrl: val,
+                          driveFolderId: val && !val.startsWith('http') ? val : p.driveFolderId,
+                        }));
+                      }}
+                      placeholder="https://drive.google.com/drive/folders/..."
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs font-mono"
+                    />
+                    <p className="text-[11px] text-stone-500 mt-1">
+                      Enlace directo si prefieres que los invitados abran una carpeta compartida de Google Drive.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-3 gap-3 pt-2">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-600 mb-1">
+                      ID Álbum Google Photos (Avanzado)
+                    </label>
+                    <input
+                      type="text"
+                      value={form.photosAlbumId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm((p) => ({
+                          ...p,
+                          photosAlbumId: val,
+                          photosAlbumUrl: val.startsWith('http') ? val : p.photosAlbumUrl,
+                        }));
+                      }}
+                      placeholder="Se crea automáticamente al subir"
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-600 mb-1">
+                      ID Carpeta Google Drive (Avanzado)
+                    </label>
+                    <input
+                      type="text"
+                      value={form.driveFolderId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setForm((p) => ({
+                          ...p,
+                          driveFolderId: val,
+                          driveFolderUrl: val.startsWith('http') ? val : p.driveFolderUrl,
+                        }));
+                      }}
+                      placeholder="Ej. 1AbCdeFGhIjK..."
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-600 mb-1">
+                      PIN del Álbum QR (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={form.photoPin}
+                      onChange={(e) => setForm((p) => ({ ...p, photoPin: e.target.value }))}
+                      placeholder="Vacío = acceso libre"
+                      className="w-full rounded-xl border border-stone-300 px-3 py-2 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 5. TEXTOS & SECCIONES */}
+      {activeSubTab === 'TEXTS_SECTIONS' && (
+        <div className="space-y-6">
+          {/* Toggles de Secciones */}
+          <div className="bg-white rounded-2xl border border-stone-200 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Sliders className="h-4 w-4 text-amber-700" />
+              <h4 className="font-semibold text-sm text-stone-900">
+                Secciones Visibles en la Invitación
+              </h4>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {SECTION_LABELS.filter((item) =>
+                isClassicPlan
+                  ? !['heroMusic', 'storyGallery', 'spotifyPlaylist', 'wishesWall', 'photoWall'].includes(item.key)
+                  : true
+              ).map((item) => {
+                const enabled = Boolean(form.sectionsConfig[item.key]);
+                return (
+                  <label
+                    key={item.key}
+                    className={`flex items-start gap-3 rounded-xl border p-3.5 cursor-pointer transition ${
+                      enabled ? 'border-emerald-300 bg-emerald-50/40' : 'border-stone-200 bg-stone-50/50'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={enabled}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          sectionsConfig: { ...prev.sectionsConfig, [item.key]: e.target.checked },
+                        }))
+                      }
+                      className="mt-1 h-4 w-4 accent-emerald-600"
+                    />
+                    <div>
+                      <div className="text-sm font-medium text-stone-900">{item.label}</div>
+                      <div className="text-xs text-stone-500">{item.desc}</div>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="grid sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-stone-100">
+              <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={form.isPrimary}
+                  onChange={(e) => setForm((p) => ({ ...p, isPrimary: e.target.checked }))}
+                />
+                Mostrar este evento en la portada principal (/)
+              </label>
+              {!isClassicPlan && (
+                <>
+                  <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.moderatePhotos}
+                      onChange={(e) => setForm((p) => ({ ...p, moderatePhotos: e.target.checked }))}
+                    />
+                    Moderar fotos/videos antes de mostrarlos en el muro
+                  </label>
+                  <label className="flex items-center gap-2.5 text-xs text-stone-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={form.moderateWishes}
+                      onChange={(e) => setForm((p) => ({ ...p, moderateWishes: e.target.checked }))}
+                    />
+                    Moderar buenos deseos antes de publicarlos
+                  </label>
+                </>
+              )}
+            </div>
+          </div>
 
       {/* Textos y Mensajes 100% Parametrizables */}
       <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-4">
@@ -2535,6 +2989,8 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
           ))}
         </div>
       </div>
+        </div>
+      )}
 
       {showDriveModal && (
         <DriveConfigModal

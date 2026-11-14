@@ -38,6 +38,16 @@ export type ParticleEffectType =
 
 export type EventPlanTier = 'CLASSIC' | 'PREMIUM';
 
+export type EnvelopeStyleType =
+  | 'IVORY_GOLD_DECKLE'
+  | 'MIDNIGHT_CELESTIAL'
+  | 'EMERALD_BOTANIC'
+  | 'BURGUNDY_ROYAL'
+  | 'ONYX_MINIMAL_GOLD'
+  | 'BLUSH_ROSE_GOLD';
+
+export type EnvelopeFlapType = 'EURO_TRIANGLE' | 'BARONIAL_ROUND' | 'DIAMOND_PEAK';
+
 export interface EventThemeConfig {
   planTier?: EventPlanTier;
   accentColor?: string;
@@ -49,6 +59,8 @@ export interface EventThemeConfig {
   moderateWishes?: boolean;
   waxSealMonogram?: string;
   waxSealColor?: string;
+  envelopeStyle?: EnvelopeStyleType;
+  envelopeFlap?: EnvelopeFlapType;
   coverImageFit?: 'cover' | 'contain' | 'auto';
   particleEffect?: ParticleEffectType;
   backgroundClean?: boolean;

@@ -365,6 +365,8 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
           openLabel={content.openEnvelopeLabel || 'Toca el sello para abrir'}
           waxSealMonogram={event.themeConfig?.waxSealMonogram || 'S&J'}
           waxSealColor={event.themeConfig?.waxSealColor}
+          envelopeStyle={event.themeConfig?.envelopeStyle}
+          envelopeFlap={event.themeConfig?.envelopeFlap}
           onSealBreak={handleSealBreak}
           onOpenComplete={handleOpenEnvelope}
         />
