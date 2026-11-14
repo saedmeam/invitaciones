@@ -36,15 +36,28 @@ export type ParticleEffectType =
 
 export type EventPlanTier = 'CLASSIC' | 'PREMIUM';
 
+export type EnvelopeOpeningMode =
+  | 'FULLSCREEN_CURTAIN'
+  | 'CLASSIC_3D_ENVELOPE'
+  | 'ROYAL_GATEFOLD'
+  | 'ORIGAMI_PETAL_REVEAL'
+  | 'HORIZONTAL_POCKET_SLIDE';
+
 export type EnvelopeStyleType =
   | 'IVORY_GOLD_DECKLE'
   | 'MIDNIGHT_CELESTIAL'
   | 'EMERALD_BOTANIC'
   | 'BURGUNDY_ROYAL'
   | 'ONYX_MINIMAL_GOLD'
-  | 'BLUSH_ROSE_GOLD';
+  | 'BLUSH_ROSE_GOLD'
+  | 'TERRACOTTA_BOHO'
+  | 'LAVENDER_PROVENCE'
+  | 'TROPICAL_SALVIA'
+  | 'ROYAL_SAPPHIRE'
+  | 'CHAMPAGNE_GLAMOUR'
+  | 'SWEET_FIFTEEN_LILAC';
 
-export type EnvelopeFlapType = 'EURO_TRIANGLE' | 'BARONIAL_ROUND' | 'DIAMOND_PEAK';
+export type EnvelopeFlapType = 'EURO_TRIANGLE' | 'BARONIAL_ROUND' | 'DIAMOND_PEAK' | 'ORIGAMI_CROSS';
 
 export interface EventThemeConfig {
   planTier?: EventPlanTier;
@@ -59,6 +72,7 @@ export interface EventThemeConfig {
   waxSealColor?: string;
   envelopeStyle?: EnvelopeStyleType;
   envelopeFlap?: EnvelopeFlapType;
+  envelopeOpeningMode?: EnvelopeOpeningMode;
   coverImageFit?: 'cover' | 'contain' | 'auto';
   particleEffect?: ParticleEffectType;
   backgroundClean?: boolean;

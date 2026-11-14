@@ -277,12 +277,24 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
     }
   };
 
-  const formattedDate = new Date(event.eventDate).toLocaleDateString('es-EC', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
+  const formattedDate = useMemo(() => {
+    try {
+      const d = new Date(event.eventDate);
+      if (isNaN(d.getTime())) return '';
+      const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      const months = [
+        'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+        'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+      ];
+      const weekday = days[d.getUTCDay()];
+      const day = d.getUTCDate();
+      const month = months[d.getUTCMonth()];
+      const year = d.getUTCFullYear();
+      return `${weekday}, ${day} de ${month} de ${year}`;
+    } catch {
+      return '';
+    }
+  }, [event.eventDate]);
 
   return (
     <div
@@ -367,6 +379,7 @@ export function InvitationView({ initialEvent, initialGroup, token }: Invitation
           waxSealColor={event.themeConfig?.waxSealColor}
           envelopeStyle={event.themeConfig?.envelopeStyle}
           envelopeFlap={event.themeConfig?.envelopeFlap}
+          openingMode={event.themeConfig?.envelopeOpeningMode || 'CLASSIC_3D_ENVELOPE'}
           onSealBreak={handleSealBreak}
           onOpenComplete={handleOpenEnvelope}
         />

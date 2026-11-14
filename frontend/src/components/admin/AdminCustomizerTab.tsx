@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
-  CalendarHeart,
   Check,
   Crown,
   Disc3,
@@ -33,6 +32,7 @@ import { DriveConfigModal } from './DriveConfigModal';
 import {
   BankAccountItem,
   EnvelopeFlapType,
+  EnvelopeOpeningMode,
   EnvelopeStyleType,
   EventPlanTier,
   EventSectionsConfig,
@@ -46,6 +46,9 @@ import {
 import {
   ENVELOPE_STYLES,
   ENVELOPE_FLAP_OPTIONS,
+  ENVELOPE_OPENING_MODES,
+  EVENT_PRESETS,
+  EnvelopeCategory,
   getEnvelopeStyleConfig,
 } from '@/lib/envelopeStyles';
 
@@ -259,6 +262,8 @@ const SECTION_LABELS: Array<{ key: keyof EventSectionsConfig; label: string; des
 export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: AdminCustomizerTabProps) {
   const [activeSubTab, setActiveSubTab] = useState<CustomizerSubTab>('PACKAGE_STYLE');
   const [showDriveModal, setShowDriveModal] = useState(false);
+  const [envelopePreviewOpen, setEnvelopePreviewOpen] = useState(false);
+  const [selectedEnvelopeCategory, setSelectedEnvelopeCategory] = useState<EnvelopeCategory | 'TODOS'>('TODOS');
   const c = event.contentConfig || {};
   const isPlannerEvent = event.organizationType === 'PLANNER';
   const canChangePlan = Boolean(isSuperAdmin && !isPlannerEvent);
@@ -290,6 +295,7 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
     coverImageUrl: event.themeConfig.coverImageUrl || '',
     waxSealMonogram: event.themeConfig.waxSealMonogram || 'S&J',
     waxSealColor: event.themeConfig.waxSealColor || '',
+    envelopeOpeningMode: (event.themeConfig.envelopeOpeningMode || 'FULLSCREEN_CURTAIN') as EnvelopeOpeningMode,
     envelopeStyle: (event.themeConfig.envelopeStyle || 'IVORY_GOLD_DECKLE') as EnvelopeStyleType,
     envelopeFlap: (event.themeConfig.envelopeFlap || 'EURO_TRIANGLE') as EnvelopeFlapType,
     particleEffect: (event.themeConfig.particleEffect || 'ROSE_PETALS') as ParticleEffectType,
@@ -383,6 +389,7 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
       coverImageUrl: event.themeConfig.coverImageUrl || '',
       waxSealMonogram: event.themeConfig.waxSealMonogram || 'S&J',
       waxSealColor: event.themeConfig.waxSealColor || '',
+      envelopeOpeningMode: (event.themeConfig.envelopeOpeningMode || 'FULLSCREEN_CURTAIN') as EnvelopeOpeningMode,
       envelopeStyle: (event.themeConfig.envelopeStyle || 'IVORY_GOLD_DECKLE') as EnvelopeStyleType,
       envelopeFlap: (event.themeConfig.envelopeFlap || 'EURO_TRIANGLE') as EnvelopeFlapType,
       particleEffect: (event.themeConfig.particleEffect || 'ROSE_PETALS') as ParticleEffectType,
@@ -597,6 +604,7 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
           waxSealColor: form.waxSealColor || undefined,
           envelopeStyle: form.envelopeStyle,
           envelopeFlap: form.envelopeFlap,
+          envelopeOpeningMode: form.envelopeOpeningMode,
           particleEffect: form.particleEffect,
           backgroundClean: form.backgroundClean,
           backgroundImageUrl: form.backgroundImageUrl,
@@ -989,156 +997,672 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
         const activeSealObj = WAX_SEAL_PALETTE.find((s) => s.id === sealColor) || WAX_SEAL_PALETTE[0];
 
         return (
-          <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-6">
+          <div className="bg-white rounded-2xl border border-stone-200 p-6 space-y-7">
+            {/* ENCABEZADO DE SECCIÓN */}
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-stone-100 pb-4">
               <div className="flex items-center gap-2">
                 <Mail className="h-5 w-5 text-amber-700" />
                 <div>
                   <h4 className="font-semibold text-sm text-stone-900">
-                    Sobre de Gala 3D, Texturas &amp; Sello de Cera Artesanal
+                    Estudio de Sobres &amp; Apertura de Gala (12 Colecciones &bull; 5 Modos)
                   </h4>
                   <p className="text-xs text-stone-500">
-                    Elige el estilo de papelería nupcial, el corte de solapa, el forro interior y el monograma en relieve
+                    Diseños para todo tipo de evento: Bodas de gala, campestres, quinceañeras, fiestas nocturnas y bodas de playa
                   </p>
                 </div>
               </div>
               <span className="text-xs text-amber-800 bg-amber-50 border border-amber-200 font-medium px-2.5 py-0.5 rounded-full">
-                6 Colecciones de Gala
+                5 Modos &bull; 12 Colecciones
               </span>
             </div>
 
-            {/* Fila Principal: Preview 3D del Sobre en Tiempo Real + Selector de Corte y Monograma */}
-            <div className="grid lg:grid-cols-12 gap-6 items-center">
-              {/* Preview 3D del Sobre Completo a Escala */}
-              <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-[#090807] border border-stone-800 text-center relative overflow-hidden shadow-2xl">
-                {/* Resplandor cálido de fondo */}
+            {/* 1. PRESETS RÁPIDOS (1-CLICK SHOWCASE) */}
+            <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-200/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-amber-700" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-amber-950">
+                    Presets Recomendados por Tipo de Evento (1 Clic para Probar)
+                  </span>
+                </div>
+                <span className="text-[11px] text-amber-800 font-medium hidden sm:inline">
+                  Aplica paleta, modo de apertura, lacre y monograma al instante
+                </span>
+              </div>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {EVENT_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => {
+                      setForm((p) => ({
+                        ...p,
+                        envelopeOpeningMode: preset.openingMode,
+                        envelopeStyle: preset.envelopeStyle,
+                        envelopeFlap: preset.envelopeFlap,
+                        waxSealColor: preset.sealColor,
+                        waxSealMonogram: preset.monogram,
+                      }));
+                      setEnvelopePreviewOpen(false);
+                      toast.success(`Preset "${preset.name}" aplicado`);
+                    }}
+                    className="text-left p-3 rounded-xl border border-amber-200/80 bg-white hover:bg-amber-100/40 transition hover:shadow-xs group flex items-start gap-2.5 cursor-pointer"
+                  >
+                    <span className="text-xl shrink-0 p-1 rounded-lg bg-amber-50 group-hover:scale-110 transition">
+                      {preset.icon}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-stone-900 text-xs truncate">
+                          {preset.name}
+                        </span>
+                        <span className="text-[9px] text-amber-700 font-bold uppercase">
+                          Cargar
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-amber-800/80 font-medium mt-0.5">
+                        {preset.eventType}
+                      </div>
+                      <p className="text-[10px] text-stone-500 mt-1 leading-snug line-clamp-2">
+                        {preset.description}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. SELECCIÓN DEL MODO DE APERTURA (5 MECANISMOS DE LUJO) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
+                  1. Modo de Apertura &amp; Mecanismo Interactivo
+                </label>
+                <span className="text-xs text-stone-500">
+                  Seleccionado: <strong className="text-stone-800">{ENVELOPE_OPENING_MODES.find(m => m.id === form.envelopeOpeningMode)?.name}</strong>
+                </span>
+              </div>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2.5">
+                {ENVELOPE_OPENING_MODES.map((mode) => {
+                  const isSelected = form.envelopeOpeningMode === mode.id;
+                  return (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => {
+                        setForm((p) => ({ ...p, envelopeOpeningMode: mode.id }));
+                        setEnvelopePreviewOpen(false);
+                      }}
+                      className={`text-left p-3.5 rounded-2xl border-2 transition relative flex flex-col justify-between ${
+                        isSelected
+                          ? 'border-amber-600 bg-amber-50/50 shadow-sm ring-1 ring-amber-600/30'
+                          : 'border-stone-200 bg-stone-50/50 hover:border-stone-300 hover:bg-stone-50'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-1 mb-1.5">
+                          <span className="text-lg">{mode.icon}</span>
+                          <span
+                            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                              isSelected
+                                ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                : 'bg-stone-100 text-stone-600'
+                            }`}
+                          >
+                            {mode.badge}
+                          </span>
+                        </div>
+                        <div className="font-semibold text-stone-900 text-xs leading-snug">
+                          {mode.name}
+                        </div>
+                        <p className="text-[10px] text-stone-500 mt-1 leading-snug line-clamp-3">
+                          {mode.description}
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <div className="mt-2.5 pt-1.5 border-t border-amber-200/60 flex items-center gap-1 text-[10px] font-bold text-amber-800">
+                          <Check className="h-3 w-3" /> Activo
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 3. FILA PRINCIPAL: PREVIEW INTERACTIVO DEL SOBRE + CONTROLES */}
+            <div className="grid lg:grid-cols-12 gap-6 items-center pt-2">
+              {/* Preview Interactivo del Sobre a Escala */}
+              <div className="lg:col-span-5 flex flex-col items-center justify-center p-5 rounded-2xl bg-[#090807] border border-stone-800 text-center relative overflow-hidden shadow-2xl">
                 <div
                   className="absolute -top-12 -left-12 w-48 h-48 rounded-full blur-3xl opacity-30 pointer-events-none"
                   style={{ backgroundColor: currentEnvelopeConfig.swatch.foil }}
                 />
 
+                {/* Contenedor Mockup según el modo seleccionado */}
                 <div
-                  className="relative w-64 sm:w-72 h-44 rounded-xl shadow-2xl overflow-hidden border transition-all duration-500"
+                  className="relative w-64 sm:w-72 h-44 rounded-xl shadow-2xl overflow-hidden border transition-all duration-700 bg-stone-900"
                   style={{
                     borderColor: `${currentEnvelopeConfig.foilColor}60`,
-                    background: currentEnvelopeConfig.linerBackground,
                   }}
                 >
-                  {/* Forro interior visible */}
-                  <div
-                    className="absolute inset-1 rounded-lg opacity-40 pointer-events-none"
-                    style={{
-                      backgroundImage: `url("${currentEnvelopeConfig.linerPatternSvg}")`,
-                      backgroundRepeat: 'repeat',
-                    }}
-                  />
-
-                  {/* Solapas Frontales (Laterales e Inferior) */}
-                  <div className="absolute inset-0 pointer-events-none">
-                    {/* Solapa Izquierda */}
+                  {/* Tarjeta de Invitación revelada en el fondo del mockup */}
+                  <div className="absolute inset-2 rounded-lg bg-[#faf7f2] p-3 text-stone-900 flex flex-col items-center justify-center text-center shadow-inner">
+                    <span
+                      className="text-[8px] uppercase tracking-[0.2em] font-medium"
+                      style={{ color: currentEnvelopeConfig.cardAccentColor }}
+                    >
+                      Nuestra Boda
+                    </span>
+                    <h5 className="font-serif text-sm font-semibold text-stone-900 mt-0.5">
+                      {form.partnerOneName || 'Joselin'} &amp; {form.partnerTwoName || 'Santiago'}
+                    </h5>
+                    <p className="text-[9px] text-stone-500 font-sans mt-0.5">
+                      {event.eventDate ? new Date(event.eventDate).toLocaleDateString() : '18 de Octubre, 2025'}
+                    </p>
                     <div
-                      className="absolute inset-0"
+                      className="mt-1.5 px-2 py-0.5 rounded text-[8px] font-semibold uppercase tracking-wider"
                       style={{
-                        clipPath: 'polygon(0% 0%, 50% 56%, 0% 100%)',
-                        background: currentEnvelopeConfig.leftFlapGradient,
-                      }}
-                    />
-                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <line x1="0" y1="0" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
-                      <line x1="50" y1="56" x2="0" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
-                    </svg>
-
-                    {/* Solapa Derecha */}
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        clipPath: 'polygon(100% 0%, 50% 56%, 100% 100%)',
-                        background: currentEnvelopeConfig.rightFlapGradient,
-                      }}
-                    />
-                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <line x1="100" y1="0" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
-                      <line x1="50" y1="56" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" vectorEffect="non-scaling-stroke" />
-                    </svg>
-
-                    {/* Solapa Inferior */}
-                    <div
-                      className="absolute inset-0"
-                      style={{
-                        clipPath: 'polygon(0% 100%, 50% 56%, 100% 100%)',
-                        background: currentEnvelopeConfig.bottomFlapGradient,
-                      }}
-                    />
-                    <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <line x1="0" y1="100" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
-                      <line x1="50" y1="56" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.9" vectorEffect="non-scaling-stroke" />
-                    </svg>
-                  </div>
-
-                  {/* Solapa Superior con Corte Seleccionado */}
-                  <div
-                    className="absolute top-0 left-0 right-0"
-                    style={{
-                      height: form.envelopeFlap === 'BARONIAL_ROUND' ? '54%' : form.envelopeFlap === 'DIAMOND_PEAK' ? '50%' : '56%',
-                      clipPath: form.envelopeFlap === 'BARONIAL_ROUND'
-                        ? 'polygon(0% 0%, 100% 0%, 94% 65%, 50% 100%, 6% 65%)'
-                        : 'polygon(0% 0%, 100% 0%, 50% 100%)',
-                      background: currentEnvelopeConfig.topFlapGradient,
-                      filter: 'drop-shadow(0 6px 10px rgba(0,0,0,0.4))',
-                    }}
-                  >
-                    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                      <polygon
-                        points={form.envelopeFlap === 'BARONIAL_ROUND' ? '0,0 100,0 94,65 50,100 6,65' : '0,0 100,0 50,100'}
-                        fill="none"
-                        stroke={currentEnvelopeConfig.foilColor}
-                        strokeWidth="1.6"
-                        vectorEffect="non-scaling-stroke"
-                      />
-                    </svg>
-                  </div>
-
-                  {/* Sello de Cera 3D Miniatura */}
-                  <div
-                    className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full flex items-center justify-center shadow-2xl transition-all duration-300"
-                    style={{
-                      top: form.envelopeFlap === 'DIAMOND_PEAK' ? '50%' : form.envelopeFlap === 'BARONIAL_ROUND' ? '54%' : '56%',
-                      borderRadius: '50% 50% 49% 51% / 51% 49% 50% 50%',
-                      background: activeSealObj.bg,
-                      boxShadow: `0 10px 20px rgba(0,0,0,0.6), inset 0 1px 2px rgba(255,255,255,0.4), inset 0 -3px 5px rgba(0,0,0,0.7), 0 0 15px ${currentEnvelopeConfig.foilColor}40`,
-                    }}
-                  >
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center border border-dashed border-white/40"
-                      style={{
-                        boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5)',
+                        background: `${currentEnvelopeConfig.cardAccentColor}18`,
+                        color: currentEnvelopeConfig.cardAccentColor,
                       }}
                     >
-                      <span
-                        className="font-serif text-xs font-bold tracking-tight text-white select-none"
-                        style={{ textShadow: '-1px -1px 1px rgba(255,255,255,0.3), 1px 1px 2px rgba(0,0,0,0.9)' }}
-                      >
-                        {form.waxSealMonogram || 'S&J'}
-                      </span>
+                      ✨ Invitación Abierta
                     </div>
                   </div>
 
-                  {/* Botón miniatura "Abrir Invitación" */}
-                  <div
-                    className={`absolute bottom-2 left-1/2 -translate-x-1/2 whitespace-nowrap inline-flex items-center gap-1 px-3 py-1 rounded-full ${currentEnvelopeConfig.buttonStyle.bg} ${currentEnvelopeConfig.buttonStyle.text} text-[9px] font-sans font-semibold tracking-wider uppercase border ${currentEnvelopeConfig.buttonStyle.border} shadow-lg`}
-                  >
-                    <Sparkles className={`w-2.5 h-2.5 ${currentEnvelopeConfig.buttonStyle.icon}`} />
-                    <span>{form.openEnvelopeLabel || 'Abrir Invitación'}</span>
-                  </div>
+                  {/* ================= A. MODO PANTALLA COMPLETA INMERSIVA (CORTINA) ================= */}
+                  {form.envelopeOpeningMode === 'FULLSCREEN_CURTAIN' && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* Solapa Izquierda */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 11,
+                          transform: envelopePreviewOpen ? 'translateX(-105%)' : 'translateX(0%)',
+                          clipPath: 'polygon(0% 0%, 50% 50%, 0% 100%)',
+                          background: currentEnvelopeConfig.leftFlapGradient,
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="0" x2="50" y2="50" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.8" />
+                          <line x1="50" y1="50" x2="0" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.8" />
+                        </svg>
+                      </div>
+
+                      {/* Solapa Derecha */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 11,
+                          transform: envelopePreviewOpen ? 'translateX(105%)' : 'translateX(0%)',
+                          clipPath: 'polygon(100% 0%, 50% 50%, 100% 100%)',
+                          background: currentEnvelopeConfig.rightFlapGradient,
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="100" y1="0" x2="50" y2="50" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.8" />
+                          <line x1="50" y1="50" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.8" />
+                        </svg>
+                      </div>
+
+                      {/* Solapa Inferior */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 12,
+                          transform: envelopePreviewOpen ? 'translateY(105%)' : 'translateY(0%)',
+                          clipPath: 'polygon(0% 100%, 100% 100%, 50% 48%)',
+                          background: currentEnvelopeConfig.bottomFlapGradient,
+                          filter: 'drop-shadow(0 -4px 8px rgba(0,0,0,0.35))',
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="100" x2="50" y2="48" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.4" strokeOpacity="0.9" />
+                          <line x1="50" y1="48" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.4" strokeOpacity="0.9" />
+                        </svg>
+                        <div className="absolute bottom-2 left-0 right-0 flex items-center justify-center">
+                          <span
+                            className="text-[7px] uppercase tracking-[0.2em] font-sans font-medium"
+                            style={{ color: currentEnvelopeConfig.foilColor }}
+                          >
+                            Invitación de Gala
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Solapa Superior (V-Cut con texto en el tope sin colisión) */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 13,
+                          transform: envelopePreviewOpen ? 'translateY(-105%)' : 'translateY(0%)',
+                          clipPath: 'polygon(0% 0%, 100% 0%, 50% 54%)',
+                          background: currentEnvelopeConfig.topFlapGradient,
+                          filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.35))',
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="0" x2="50" y2="54" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.4" strokeOpacity="0.95" />
+                          <line x1="50" y1="54" x2="100" y2="0" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.4" strokeOpacity="0.95" />
+                        </svg>
+                        <div className="absolute top-2 left-0 right-0 flex flex-col items-center">
+                          <span
+                            className="text-[7px] uppercase tracking-[0.25em] font-sans font-medium px-2 py-0.5 rounded-full"
+                            style={{
+                              color: currentEnvelopeConfig.foilColor,
+                              border: `1px solid ${currentEnvelopeConfig.foilColor}40`,
+                              background: 'rgba(0,0,0,0.25)',
+                            }}
+                          >
+                            Nuestra Boda
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Sello de Cera Central (Exactamente a 54% sin colisión de texto) */}
+                      <div
+                        className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center transition-all duration-500"
+                        style={{
+                          top: '54%',
+                          zIndex: 20,
+                          opacity: envelopePreviewOpen ? 0 : 1,
+                          transform: envelopePreviewOpen ? 'translate(-50%, -50%) scale(1.3)' : 'translate(-50%, -50%) scale(1)',
+                        }}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center shadow-xl"
+                          style={{
+                            background: activeSealObj.bg,
+                            boxShadow: `0 8px 16px rgba(0,0,0,0.6), 0 0 15px ${currentEnvelopeConfig.foilColor}50`,
+                          }}
+                        >
+                          <div className="w-7 h-7 rounded-full border border-dashed border-white/50 flex items-center justify-center">
+                            <span className="font-serif text-[10px] font-bold text-white select-none">
+                              {form.waxSealMonogram || 'S&J'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ================= B. MODO DÍPTICO IMPERIAL (GATEFOLD) ================= */}
+                  {form.envelopeOpeningMode === 'ROYAL_GATEFOLD' && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* Puerta Izquierda */}
+                      <div
+                        className="absolute top-0 bottom-0 left-0 w-1/2 overflow-hidden transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 12,
+                          transform: envelopePreviewOpen ? 'translateX(-105%)' : 'translateX(0%)',
+                          background: currentEnvelopeConfig.leftFlapGradient,
+                          boxShadow: '4px 0 10px rgba(0,0,0,0.5)',
+                        }}
+                      >
+                        <div
+                          className="absolute inset-0 opacity-15"
+                          style={{
+                            backgroundImage: `url("${currentEnvelopeConfig.linerPatternSvg}")`,
+                            backgroundRepeat: 'repeat',
+                          }}
+                        />
+                        <div
+                          className="absolute top-0 bottom-0 right-0 w-[2px]"
+                          style={{ background: currentEnvelopeConfig.foilBorderGradient }}
+                        />
+                        <div className="absolute top-2.5 left-3">
+                          <span className="font-serif text-[9px] font-medium text-white/95 truncate block max-w-[90px]">
+                            {form.partnerOneName || 'Joselin'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Puerta Derecha */}
+                      <div
+                        className="absolute top-0 bottom-0 right-0 w-1/2 overflow-hidden transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 12,
+                          transform: envelopePreviewOpen ? 'translateX(105%)' : 'translateX(0%)',
+                          background: currentEnvelopeConfig.rightFlapGradient,
+                          boxShadow: '-4px 0 10px rgba(0,0,0,0.5)',
+                        }}
+                      >
+                        <div
+                          className="absolute inset-0 opacity-15"
+                          style={{
+                            backgroundImage: `url("${currentEnvelopeConfig.linerPatternSvg}")`,
+                            backgroundRepeat: 'repeat',
+                          }}
+                        />
+                        <div
+                          className="absolute top-0 bottom-0 left-0 w-[2px]"
+                          style={{ background: currentEnvelopeConfig.foilBorderGradient }}
+                        />
+                        <div className="absolute top-2.5 right-3 text-right">
+                          <span className="font-serif text-[9px] font-medium text-white/95 truncate block max-w-[90px]">
+                            {form.partnerTwoName || 'Santiago'}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Sello de Cera Central (Bloquea ambas puertas en la unión central) */}
+                      <div
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center transition-all duration-500"
+                        style={{
+                          zIndex: 20,
+                          opacity: envelopePreviewOpen ? 0 : 1,
+                          transform: envelopePreviewOpen ? 'translate(-50%, -50%) scale(1.3)' : 'translate(-50%, -50%) scale(1)',
+                        }}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center shadow-xl"
+                          style={{
+                            background: activeSealObj.bg,
+                            boxShadow: `0 8px 16px rgba(0,0,0,0.6), 0 0 15px ${currentEnvelopeConfig.foilColor}50`,
+                          }}
+                        >
+                          <div className="w-7 h-7 rounded-full border border-dashed border-white/50 flex items-center justify-center">
+                            <span className="font-serif text-[10px] font-bold text-white select-none">
+                              {form.waxSealMonogram || 'S&J'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ================= C. MODO FLOR DE ORIGAMI ================= */}
+                  {form.envelopeOpeningMode === 'ORIGAMI_PETAL_REVEAL' && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* Pétalo Superior */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 12,
+                          clipPath: 'polygon(0% 0%, 100% 0%, 50% 50%)',
+                          background: currentEnvelopeConfig.topFlapGradient,
+                          transform: envelopePreviewOpen ? 'translateY(-105%) rotate(-20deg)' : 'translateY(0%) rotate(0deg)',
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="0" x2="50" y2="50" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.85" />
+                          <line x1="50" y1="50" x2="100" y2="0" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.85" />
+                        </svg>
+                      </div>
+
+                      {/* Pétalo Inferior */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 12,
+                          clipPath: 'polygon(0% 100%, 100% 100%, 50% 50%)',
+                          background: currentEnvelopeConfig.bottomFlapGradient,
+                          transform: envelopePreviewOpen ? 'translateY(105%) rotate(20deg)' : 'translateY(0%) rotate(0deg)',
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="100" x2="50" y2="50" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.85" />
+                          <line x1="50" y1="50" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.85" />
+                        </svg>
+                      </div>
+
+                      {/* Pétalo Izquierdo */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 11,
+                          clipPath: 'polygon(0% 0%, 50% 50%, 0% 100%)',
+                          background: currentEnvelopeConfig.leftFlapGradient,
+                          transform: envelopePreviewOpen ? 'translateX(-105%) rotate(-25deg)' : 'translateX(0%) rotate(0deg)',
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="0" x2="50" y2="50" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                          <line x1="50" y1="50" x2="0" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                        </svg>
+                      </div>
+
+                      {/* Pétalo Derecho */}
+                      <div
+                        className="absolute inset-0 transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)]"
+                        style={{
+                          zIndex: 11,
+                          clipPath: 'polygon(100% 0%, 50% 50%, 100% 100%)',
+                          background: currentEnvelopeConfig.rightFlapGradient,
+                          transform: envelopePreviewOpen ? 'translateX(105%) rotate(25deg)' : 'translateX(0%) rotate(0deg)',
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="100" y1="0" x2="50" y2="50" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                          <line x1="50" y1="50" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                        </svg>
+                      </div>
+
+                      {/* Sello de Cera Central (Exactamente en el punto de intersección de los 4 pétalos a 50%) */}
+                      <div
+                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center transition-all duration-500"
+                        style={{
+                          zIndex: 20,
+                          opacity: envelopePreviewOpen ? 0 : 1,
+                          transform: envelopePreviewOpen ? 'translate(-50%, -50%) scale(1.3)' : 'translate(-50%, -50%) scale(1)',
+                        }}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center shadow-xl"
+                          style={{
+                            background: activeSealObj.bg,
+                            boxShadow: `0 8px 16px rgba(0,0,0,0.6), 0 0 15px ${currentEnvelopeConfig.foilColor}50`,
+                          }}
+                        >
+                          <div className="w-7 h-7 rounded-full border border-dashed border-white/50 flex items-center justify-center">
+                            <span className="font-serif text-[10px] font-bold text-white select-none">
+                              {form.waxSealMonogram || 'S&J'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ================= D. MODO ESTUCHE / FUNDA DE GALA ================= */}
+                  {form.envelopeOpeningMode === 'HORIZONTAL_POCKET_SLIDE' && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* Funda deslizante hacia la izquierda con pestaña biselada */}
+                      <div
+                        className="absolute top-0 bottom-0 left-0 w-[65%] transition-transform duration-700 ease-[cubic-bezier(0.77,0,0.175,1)] overflow-hidden"
+                        style={{
+                          zIndex: 12,
+                          background: currentEnvelopeConfig.paperGradient,
+                          boxShadow: '4px 0 15px rgba(0,0,0,0.4)',
+                          clipPath: 'polygon(0% 0%, 100% 0%, 90% 50%, 100% 100%, 0% 100%)',
+                          transform: envelopePreviewOpen ? 'translateX(-105%)' : 'translateX(0%)',
+                        }}
+                      >
+                        <div
+                          className="absolute inset-0 opacity-15"
+                          style={{
+                            backgroundImage: `url("${currentEnvelopeConfig.linerPatternSvg}")`,
+                            backgroundRepeat: 'repeat',
+                          }}
+                        />
+                        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <polyline
+                            points="100,0 90,50 100,100"
+                            fill="none"
+                            stroke={currentEnvelopeConfig.foilColor}
+                            strokeWidth="1.5"
+                          />
+                        </svg>
+                        <div className="absolute top-3 left-3 text-left">
+                          <span
+                            className="text-[7px] uppercase tracking-widest font-sans font-medium"
+                            style={{ color: currentEnvelopeConfig.foilColor }}
+                          >
+                            Pase de Gala
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Sello de Cera fijado en el borde de la funda */}
+                      <div
+                        className="absolute top-1/2 -translate-y-1/2 flex flex-col items-center justify-center transition-all duration-500"
+                        style={{
+                          left: '58%',
+                          zIndex: 20,
+                          opacity: envelopePreviewOpen ? 0 : 1,
+                          transform: envelopePreviewOpen ? 'translate(-50%, -50%) scale(1.3)' : 'translate(-50%, -50%) scale(1)',
+                        }}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center shadow-xl"
+                          style={{
+                            background: activeSealObj.bg,
+                            boxShadow: `0 8px 16px rgba(0,0,0,0.6), 0 0 15px ${currentEnvelopeConfig.foilColor}50`,
+                          }}
+                        >
+                          <div className="w-7 h-7 rounded-full border border-dashed border-white/50 flex items-center justify-center">
+                            <span className="font-serif text-[10px] font-bold text-white select-none">
+                              {form.waxSealMonogram || 'S&J'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ================= E. MODO SOBRE CARTA 3D TRADICIONAL ================= */}
+                  {form.envelopeOpeningMode === 'CLASSIC_3D_ENVELOPE' && (
+                    <div className="absolute inset-0 pointer-events-none">
+                      {/* Solapas Frontales (Laterales e Inferior) con ribetes de oro exactos */}
+                      <div className="absolute inset-0" style={{ zIndex: 12 }}>
+                        {/* Solapa Izquierda */}
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            clipPath: 'polygon(0% 0%, 50% 56%, 0% 100%)',
+                            background: currentEnvelopeConfig.leftFlapGradient,
+                          }}
+                        />
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="0" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                          <line x1="50" y1="56" x2="0" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                        </svg>
+
+                        {/* Solapa Derecha */}
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            clipPath: 'polygon(100% 0%, 50% 56%, 100% 100%)',
+                            background: currentEnvelopeConfig.rightFlapGradient,
+                          }}
+                        />
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="100" y1="0" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                          <line x1="50" y1="56" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1" strokeOpacity="0.75" />
+                        </svg>
+
+                        {/* Solapa Inferior */}
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            clipPath: 'polygon(0% 100%, 50% 56%, 100% 100%)',
+                            background: currentEnvelopeConfig.bottomFlapGradient,
+                            filter: 'drop-shadow(0 -3px 6px rgba(0,0,0,0.25))',
+                          }}
+                        />
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <line x1="0" y1="100" x2="50" y2="56" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.85" />
+                          <line x1="50" y1="56" x2="100" y2="100" stroke={currentEnvelopeConfig.foilColor} strokeWidth="1.2" strokeOpacity="0.85" />
+                        </svg>
+                      </div>
+
+                      {/* Solapa Superior Plegable hacia arriba con Forro */}
+                      <div
+                        className="absolute top-0 left-0 right-0 origin-top transition-transform duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                        style={{
+                          height: '56%',
+                          clipPath:
+                            form.envelopeFlap === 'BARONIAL_ROUND'
+                              ? 'polygon(0% 0%, 100% 0%, 92% 52%, 50% 100%, 8% 52%)'
+                              : 'polygon(0% 0%, 100% 0%, 50% 100%)',
+                          background: currentEnvelopeConfig.topFlapGradient,
+                          transform: envelopePreviewOpen ? 'rotateX(180deg)' : 'rotateX(0deg)',
+                          zIndex: envelopePreviewOpen ? 5 : 20,
+                          filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.35))',
+                        }}
+                      >
+                        <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                          <polyline
+                            points={
+                              form.envelopeFlap === 'BARONIAL_ROUND'
+                                ? '0,0 8,52 50,100 92,52 100,0'
+                                : '0,0 50,100 100,0'
+                            }
+                            fill="none"
+                            stroke={currentEnvelopeConfig.foilColor}
+                            strokeWidth="1.5"
+                            strokeOpacity="0.95"
+                          />
+                        </svg>
+                      </div>
+
+                      {/* Sello de Cera (Alineado exactamente en la punta de la solapa a 56%) */}
+                      <div
+                        className="absolute left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center transition-all duration-300"
+                        style={{
+                          top: '56%',
+                          zIndex: 25,
+                          opacity: envelopePreviewOpen ? 0 : 1,
+                        }}
+                      >
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center shadow-2xl"
+                          style={{
+                            background: activeSealObj.bg,
+                            boxShadow: `0 8px 16px rgba(0,0,0,0.6), 0 0 15px ${currentEnvelopeConfig.foilColor}40`,
+                          }}
+                        >
+                          <div className="w-7 h-7 rounded-full border border-dashed border-white/40 flex items-center justify-center">
+                            <span className="font-serif text-[10px] font-bold text-white select-none">
+                              {form.waxSealMonogram || 'S&J'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="mt-3 text-center">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30">
-                    <span>{currentEnvelopeConfig.name}</span>
+                {/* BOTÓN PROBAR APERTURA EN VIVO EN EL ADMIN */}
+                <div className="mt-3.5 flex flex-col items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setEnvelopePreviewOpen((prev) => !prev)}
+                    className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold shadow-sm transition active:scale-95 cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>
+                      {envelopePreviewOpen ? 'Restaurar Sobre Cerrado' : '✨ Probar Apertura en Vivo'}
+                    </span>
+                  </button>
+
+                  <div className="text-[11px] text-stone-400 mt-1 max-w-xs leading-relaxed">
+                    <strong className="text-amber-400">{currentEnvelopeConfig.name}</strong>
+                    <span className="block text-[10px] text-stone-500">
+                      {form.envelopeOpeningMode === 'FULLSCREEN_CURTAIN'
+                        ? 'Telón 4 solapas pantalla completa (Invitplan)'
+                        : form.envelopeOpeningMode === 'ROYAL_GATEFOLD'
+                        ? 'Díptico doble puerta francesa'
+                        : form.envelopeOpeningMode === 'ORIGAMI_PETAL_REVEAL'
+                        ? 'Flor de origami en espiral rotacional'
+                        : form.envelopeOpeningMode === 'HORIZONTAL_POCKET_SLIDE'
+                        ? 'Funda deslizante lateral de gala'
+                        : 'Sobre carta 3D tradicional'}
+                    </span>
                   </div>
-                  <p className="text-[11px] text-stone-400 mt-1 max-w-xs leading-relaxed">
-                    {currentEnvelopeConfig.subtitle} • {ENVELOPE_FLAP_OPTIONS.find((f) => f.id === form.envelopeFlap)?.label}
-                  </p>
                 </div>
               </div>
 
@@ -1147,9 +1671,9 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                 {/* 1. Selector de Corte de Solapa */}
                 <div>
                   <label className="block text-xs font-semibold text-stone-800 mb-1.5">
-                    1. Corte de la Solapa (Flap Cut)
+                    2. Corte de Solapa / Pliegue Artesanal
                   </label>
-                  <div className="grid sm:grid-cols-3 gap-2">
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
                     {ENVELOPE_FLAP_OPTIONS.map((flap) => {
                       const isSelected = form.envelopeFlap === flap.id;
                       return (
@@ -1157,9 +1681,9 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                           key={flap.id}
                           type="button"
                           onClick={() => setForm((p) => ({ ...p, envelopeFlap: flap.id }))}
-                          className={`text-left p-3 rounded-xl border text-xs transition ${
+                          className={`text-left p-2.5 rounded-xl border text-xs transition ${
                             isSelected
-                              ? 'border-amber-600 bg-amber-50/70 font-semibold text-amber-950 shadow-xs'
+                              ? 'border-amber-600 bg-amber-50/70 font-semibold text-amber-950 shadow-xs ring-1 ring-amber-600/30'
                               : 'border-stone-200 bg-stone-50/60 hover:bg-stone-100 text-stone-700'
                           }`}
                         >
@@ -1178,7 +1702,7 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-semibold text-stone-800">
-                      2. Monograma Grabado en el Sello
+                      3. Monograma Grabado en el Sello
                     </label>
                     <span className="text-[11px] text-stone-500">Máx 8 caracteres</span>
                   </div>
@@ -1189,22 +1713,29 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                       value={form.waxSealMonogram}
                       onChange={(e) => setForm((p) => ({ ...p, waxSealMonogram: e.target.value }))}
                       placeholder="Ej. S&J"
-                      className="w-32 rounded-xl border border-stone-300 px-3 py-2 text-sm font-serif font-bold text-stone-900 tracking-wider text-center"
+                      className="w-28 rounded-xl border border-stone-300 px-3 py-2 text-sm font-serif font-bold text-stone-900 tracking-wider text-center"
                     />
                     <div className="flex flex-wrap gap-1.5 flex-1">
                       <button
                         type="button"
                         onClick={() => setForm((p) => ({ ...p, waxSealMonogram: 'S&J' }))}
-                        className="rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 px-2.5 py-1.5 text-[11px] font-medium text-amber-900 transition"
+                        className="rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 px-2 py-1.5 text-[11px] font-medium text-amber-900 transition"
                       >
                         S&amp;J
                       </button>
                       <button
                         type="button"
                         onClick={() => setForm((p) => ({ ...p, waxSealMonogram: 'J&S' }))}
-                        className="rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 px-2.5 py-1.5 text-[11px] font-medium text-stone-700 transition"
+                        className="rounded-lg border border-stone-200 bg-stone-50 hover:bg-stone-100 px-2 py-1.5 text-[11px] font-medium text-stone-700 transition"
                       >
                         J&amp;S
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm((p) => ({ ...p, waxSealMonogram: '15' }))}
+                        className="rounded-lg border border-fuchsia-200 bg-fuchsia-50 hover:bg-fuchsia-100 px-2 py-1.5 text-[11px] font-medium text-fuchsia-900 transition"
+                      >
+                        Mis 15
                       </button>
                       <button
                         type="button"
@@ -1225,7 +1756,7 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-xs font-semibold text-stone-800">
-                      3. Color del Sello de Cera (Lacre)
+                      4. Color del Lacre de Cera Artesanal
                     </label>
                     <span className="text-[11px] text-stone-500 capitalize">
                       {activeSealObj.label}
@@ -1268,14 +1799,49 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
               </div>
             </div>
 
-            {/* Selector de Colecciones de Sobre (6 Estilos de Lujo) */}
-            <div className="pt-3 border-t border-stone-100">
-              <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700 mb-3">
-                Colección de Papelería &amp; Estilo de Sobre
-              </label>
+            {/* 4. CATÁLOGO MAESTRO: 12 COLECCIONES DE LUJO & FILTRO POR EVENTO */}
+            <div className="pt-4 border-t border-stone-100 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-stone-700">
+                    5. Colección de Papelería &amp; Estilo Visual (12 Opciones)
+                  </label>
+                  <p className="text-xs text-stone-500">
+                    Filtra según la temática del evento y haz clic para aplicar la colección completa
+                  </p>
+                </div>
 
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {ENVELOPE_STYLES.map((style) => {
+                {/* Filtros por Categoría */}
+                <div className="flex flex-wrap gap-1">
+                  {[
+                    { id: 'TODOS', label: 'Todas (12)' },
+                    { id: 'BODA_CLASICA', label: 'Boda Clásica' },
+                    { id: 'GALA_NOCTURNA', label: 'Gala Nocturna' },
+                    { id: 'CAMPESTRE_BOHO', label: 'Campestre & Boho' },
+                    { id: 'PLAYA_TROPICAL', label: 'Playa & Trópico' },
+                    { id: 'QUINCEANERA', label: '15 Años' },
+                    { id: 'GLAMOUR_VIP', label: 'Gala VIP' },
+                  ].map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setSelectedEnvelopeCategory(cat.id as EnvelopeCategory | 'TODOS')}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition ${
+                        selectedEnvelopeCategory === cat.id
+                          ? 'bg-amber-700 text-white shadow-xs'
+                          : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {ENVELOPE_STYLES.filter(
+                  (s) => selectedEnvelopeCategory === 'TODOS' || s.category === selectedEnvelopeCategory
+                ).map((style) => {
                   const isSelected = form.envelopeStyle === style.id;
                   return (
                     <button
@@ -1285,11 +1851,10 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                         setForm((p) => ({
                           ...p,
                           envelopeStyle: style.id,
-                          // Si no tiene color de lacre forzado, sugerir el color de gala del sobre
                           waxSealColor: p.waxSealColor ? p.waxSealColor : style.recommendedSealColor,
                         }));
                       }}
-                      className={`text-left p-4 rounded-2xl border-2 transition relative flex flex-col justify-between ${
+                      className={`text-left p-3.5 rounded-2xl border-2 transition relative flex flex-col justify-between ${
                         isSelected
                           ? 'border-amber-600 bg-amber-50/40 shadow-sm ring-1 ring-amber-600/30'
                           : 'border-stone-200 bg-white hover:border-stone-300 hover:bg-stone-50/50'
@@ -1313,13 +1878,13 @@ export function AdminCustomizerTab({ event, isSuperAdmin = false, onUpdated }: A
                         <div className="text-[11px] font-medium text-amber-800/90 mt-0.5">
                           {style.subtitle}
                         </div>
-                        <p className="text-[11px] text-stone-500 mt-1 leading-snug line-clamp-2">
+                        <p className="text-[10px] text-stone-500 mt-1 leading-snug line-clamp-2">
                           {style.description}
                         </p>
                       </div>
 
-                      {/* Muestra Cromática del Sobre (Papel, Sombra y Foil) */}
-                      <div className="flex items-center gap-2 pt-3 mt-3 border-t border-stone-100">
+                      {/* Muestra Cromática del Sobre */}
+                      <div className="flex items-center justify-between pt-2.5 mt-2.5 border-t border-stone-100">
                         <span className="text-[10px] text-stone-400 font-medium">Acabados:</span>
                         <div className="flex items-center -space-x-1">
                           <div
